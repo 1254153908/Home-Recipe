@@ -1,0 +1,98 @@
+# ========== Java / Maven ==========
+target/
+build/
+out/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.png
+*.jpg
+!gradle/wrapper/gradle-wrapper.jar
+
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+dist/
+*.whl
+.venv/
+venv/
+env/
+.env
+.venv
+*.so
+instance/
+
+# ========== Node / Frontend ==========
+node_modules/
+dist/
+*.local
+frontend/dist/
+
+# ========== IDE ==========
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+nbproject/
+nbbuild/
+nbdist/
+.apt_generated
+*.sublime-*
+
+# ========== 系统文件 ==========
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========== 日志 ==========
+*.log
+logs/
+*.log.*
+
+# ========== 上传文件 & 数据库 ==========
+uploads/
+*.db
+*.sqlite
+*.sqlite3
+*.docx
+
+# ========== 临时文件 ==========
+*.tmp
+*.bak
+*.swp
+*~
+*#
+*.tgz
+
+# ========== CodeBuddy（项目数据） ==========
+.codebuddy/
+
+# ========== 文档（仅保留 README） ==========
+*.md
+!README.md
+openspec/
+
+# ========== 测试文件 ==========
+test/
+
+# ========== Docker 数据卷 ==========
+docker/**/data/
+docker/**/sdi/
+docker/**/*.sdi
+docker/**/*.meta
+docker/**/*.1
+
+ui-base/
