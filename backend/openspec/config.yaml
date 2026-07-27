@@ -1,0 +1,37 @@
+schema: spec-driven
+
+# 项目上下文：OpenSpec 在生成 proposal / spec / tasks 时展示给 AI。
+# 约定不在此重复写——编码期操作护栏与历史坑点见仓库根 AGENTS.md。
+context: |
+  ## 技术栈（来自 pom.xml，已确认，不可臆造）
+  - 语言/编译：Java 8（maven.compiler source/target = 8）。升级到 Java 17/21 会破坏与 Spring Boot 2.7 的兼容，禁止。
+  - 框架：Spring Boot 2.7.18（父依赖）。禁止随意升 3.x——3.x 需 Spring 6 / Jakarta 命名空间，破坏性极大。
+  - 持久层：MyBatis-Plus 3.5.5（须用非 spring3 版，已适配 SB 2.7）。
+  - 数据库驱动：MySQL Connector/J 8.0.33（runtime）。
+  - 对象建模：Lombok（版本由父依赖管理，禁止显式指定 lombok 版本）。
+  - 对象存储：MinIO 8.5.13。
+  - 测试：spring-boot-starter-test（test scope），但 src/test 当前为空，无用例。
+
+  ## 当前代码现状（写规格前须知）
+  - 本仓库目前是空壳脚手架：Controller / Service / Service.impl 均为空实现，无真实业务代码。
+  - 以下约定暂无代码可提取，禁止编造，标注“待补全”：
+    · 错误码规则：待补全（无错误码枚举/常量）
+    · API 返回格式：待补全（无统一 Result/Response 包装）
+    · 命名规范：仅确认层级命名 Controller / Service / Service.impl，细节待补全
+  - 注意：现有源码包名误写为 java.org.huhu.recipe.*（应为 org.huhu.recipe.*），当前不可直接编译；新增文件须写对包名。
+
+  ## 老项目变更铁律（写 proposal/spec 必须遵守）
+  1. 任何变更先评估对现有功能的影响，proposal 须含“影响评估”小节。
+  2. 涉及数据库/表结构修改，须说明数据迁移方案（含回滚）。
+  3. 禁止随意重构核心逻辑；优先增量修改，重构须单独 proposal 并说明理由。
+
+# 各 artifact 的生成规则（仅保留驱动规格写作所需的约束）
+rules:
+  proposal:
+    - 必须含“影响评估”小节，说明对现有功能/接口的影响。
+    - 涉及数据库变更必须含“数据迁移方案”小节（含回滚步骤）。
+    - 禁止夹带与本次目标无关的核心逻辑重构。
+    - 依赖版本变更（尤其 Spring Boot / MyBatis-Plus / Java）必须单列风险说明。
+  tasks:
+    - 每个 task 标注是否触及“禁止直接修改”模块（见 AGENTS.md）。
+    - 数据库相关 task 必须附带可执行的迁移/回滚脚本入口。

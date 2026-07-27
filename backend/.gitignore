@@ -80,10 +80,12 @@ uploads/
 # ========== CodeBuddy（项目数据） ==========
 .codebuddy/
 
-# ========== 文档（仅保留 README） ==========
+# ========== 文档（保留 README + 规约文件） ==========
 *.md
 !README.md
-openspec/
+!AGENTS.md
+!openspec/**/*.md
+openspec/changes/archive/
 
 # ========== 测试文件 ==========
 test/

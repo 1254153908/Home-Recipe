@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.huhu.recipe.mapper.MealPlanMapper">
+
+    <!-- 主查询：计划 + 关联菜谱 -->
+    <resultMap id="PlanRecipeDetailMap" type="org.huhu.recipe.dto.PlanRecipeDetailVO">
+        <id column="plan_id" property="planId"/>
+        <result column="plan_remark" property="remark"/>
+        <result column="plan_status" property="status"/>
+        <result column="plan_review" property="review"/>
+        <result column="plan_image" property="planImageUrl"/>
+        <result column="plan_date" property="planDate"/>
+        <result column="recipe_id" property="recipeId"/>
+        <result column="title" property="title"/>
+        <result column="recipe_image" property="recipeImageUrl"/>
+        <!-- 嵌套子查询：步骤（每步独立，可带图片） -->
+        <collection property="steps" ofType="org.huhu.recipe.entity.RecipeStep"
+                    select="selectStepsByRecipe" column="recipe_id"/>
+        <!-- 嵌套子查询：原料 -->
+        <collection property="ingredients" ofType="org.huhu.recipe.dto.ItemView"
+                    select="selectIngredientsByRecipe" column="recipe_id"/>
+        <!-- 嵌套子查询：调料 -->
+        <collection property="seasonings" ofType="org.huhu.recipe.dto.ItemView"
+                    select="selectSeasoningsByRecipe" column="recipe_id"/>
+    </resultMap>
+
+    <select id="selectPlanRecipeDetail" resultMap="PlanRecipeDetailMap">
+        SELECT
+            mp.id           AS plan_id,
+            mp.remark       AS plan_remark,
+            mp.status       AS plan_status,
+            mp.review       AS plan_review,
+            mp.image_url    AS plan_image,
+            mp.plan_date    AS plan_date,
+            r.id            AS recipe_id,
+            r.title         AS title,
+            r.image_url     AS recipe_image
+        FROM meal_plan mp
+        LEFT JOIN recipe r ON r.id = mp.recipe_id
+        WHERE mp.id = #{planId}
+    </select>
+
+    <!-- 步骤：每步一行，可带图片 -->
+    <select id="selectStepsByRecipe" resultType="org.huhu.recipe.entity.RecipeStep">
+        SELECT id,
+               recipe_id  AS recipeId,
+               step_no    AS stepNo,
+               content,
+               image_url  AS imageUrl
+        FROM recipe_step
+        WHERE recipe_id = #{recipeId}
+        ORDER BY step_no
+    </select>
+
+    <!-- 原料：菜谱 -> 食材明细 -> 食材名称 -->
+    <select id="selectIngredientsByRecipe" resultType="org.huhu.recipe.dto.ItemView">
+        SELECT i.name AS name,
+               ri.quantity AS quantity,
+               ri.unit AS unit
+        FROM recipe_ingredient ri
+        JOIN ingredient i ON i.id = ri.ingredient_id
+        WHERE ri.recipe_id = #{recipeId}
+    </select>
+
+    <!-- 调料：菜谱 -> 调料明细 -> 调料名称 -->
+    <select id="selectSeasoningsByRecipe" resultType="org.huhu.recipe.dto.ItemView">
+        SELECT s.name AS name,
+               rs.quantity AS quantity,
+               rs.unit AS unit
+        FROM recipe_seasoning rs
+        JOIN seasoning s ON s.id = rs.seasoning_id
+        WHERE rs.recipe_id = #{recipeId}
+    </select>
+
+</mapper>

@@ -1,0 +1,24 @@
+server:
+  port: 4993
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 真实 MySQL 连接，请按你的环境修改
+    url: jdbc:mysql://localhost:3306/home_recipe?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: org.huhu.recipe.entity
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+# AI 识别假数据服务（Flask）地址
+ai:
+  mock-service:
+    url: http://localhost:5000/recognize
