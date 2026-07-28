@@ -4,8 +4,10 @@ import lombok.Data;
 
 @Data
 public class AiRecognizeRequest {
-    /** link / video / image */
+    /** link / image */
     private String sourceType;
-    /** 链接地址，或图片/视频的本地路径/Base64（本 demo 仅作透传） */
+    /** URL 地址 或 base64 图片数据 */
     private String content;
+    /** 来源域名提示，用于选择解析策略（如下厨房直接 HTML 解析） */
+    private String urlHint;
 }

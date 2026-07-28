@@ -23,4 +23,20 @@ public class FileUploadController {
         result.put("url", url);
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * 通过网络图片 URL 下载图片并上传到 MinIO / 本地存储
+     * 请求体: {"url": "https://example.com/image.jpg"}
+     */
+    @PostMapping("/upload/url")
+    public ResponseEntity<Map<String, String>> uploadFromUrl(@RequestBody Map<String, String> body) {
+        String imageUrl = body.get("url");
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new IllegalArgumentException("url参数不能为空");
+        }
+        String resultUrl = fileUploadService.uploadFromUrl(imageUrl);
+        Map<String, String> result = new HashMap<>();
+        result.put("url", resultUrl);
+        return ResponseEntity.ok(result);
+    }
 }

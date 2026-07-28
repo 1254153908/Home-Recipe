@@ -221,29 +221,51 @@ spring:
 #### AI 识菜生成草稿
 `POST /api/recipes/ai-recognize`
 
-请求体：
-```json
-{ "sourceType": "link", "content": "https://.../recipe-page" }
-```
-
-> **识别模式**（由 Python 服务 `config.yaml` 的 `AI_MODE` 控制）：
-> - **mock**（默认）：关键词匹配，URL 含 "tomato"/"tofu"/"rib" 等关键词时返回预置菜谱
-> - **openai**：通用方案 — Python 服务抓取页面 HTML → 提取纯文本 → 发给 GPT-4o（或兼容 API）→ 返回结构化菜谱 JSON（含标题、原料、调料、步骤及步骤配图 URL）
->
-> 使用 openai 模式需在 `backend/python/.env` 中配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL`。
->
-> AI 服务源码见 `backend/python/`。
-
-响应：`RecipeDraft`（可用来预填创建表单）
+**请求体：**
 ```json
 {
-  "title": "识别出的菜名",
-  "imageUrl": "https://...（页面封面图）",
-  "steps": [ { "content": "...", "imageUrl": "https://...（该步骤配图）" } ],
-  "ingredients": [ { "name": "番茄", "quantity": "2", "unit": "个" } ],
-  "seasonings": [ { "name": "盐", "quantity": "5", "unit": "g" } ]
+  "sourceType": "link",
+  "content": "https://www.xiachufang.com/recipe/106869446/",
+  "urlHint": "xiachufang.com"
 }
 ```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `sourceType` | 否 | `link`（网页链接）/ `image`（base64 图片），默认 `link` |
+| `content` | 是 | URL 地址 或 `data:image/xxx;base64,...` 图片数据 |
+| `urlHint` | 否 | 来源域名提示（如 `xiachufang.com`），辅助选择解析策略 |
+
+> **三种识别策略**（由 Python 服务根据 `sourceType` 和域名自动选择）：
+
+| 策略 | 触发条件 | 实现方式 | LLM 调用 |
+|---|---|---|---|
+| 下厨房 HTML 解析 | URL 含 `xiachufang.com` | BeautifulSoup 直接提取 | 免费 |
+| 通用网页 LLM | 其他链接 | 抓 HTML → 提纯文本 → LLM 转 JSON | 需要 |
+| 图片 Vision | `sourceType=image` | base64 图片 → Vision 模型识别 | 需要 |
+
+> **AI 模式由** `backend/python/.env` 的 `AI_MODE` 控制（`mock` / `openai`）。
+> mock 模式零成本，openai 模式需配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL`（文本）和 `OPENAI_VISION_MODEL`（图片）。
+
+**响应：**`RecipeDraft`
+```json
+{
+  "title": "红烧排骨",
+  "imageUrl": "https://i2.chuimg.com/xxx.jpg",
+  "steps": [
+    { "content": "排骨冷水下锅焯水", "imageUrl": "" },
+    { "content": "热锅凉油，下冰糖炒糖色", "imageUrl": "" }
+  ],
+  "ingredients": [
+    { "name": "猪小排", "quantity": "500", "unit": "g" }
+  ],
+  "seasonings": [
+    { "name": "生抽", "quantity": "2", "unit": "勺" }
+  ]
+}
+```
+
+> **图片识别说明**：前端选择图片后转 base64 发给后端，仅用于 AI 识别，**不存入数据库**。识别结果（文字内容）自动填入表单。
 
 ---
 
@@ -282,9 +304,9 @@ spring:
 #### 创建计划
 `POST /api/meal-plans`
 
-请求体（即 `MealPlan` 实体字段）：
+请求体：
 ```json
-{ "recipeId": 1, "remark": "今晚做", "status": "planned", "review": "", "imageUrl": "", "planDate": "2026-07-27" }
+{ "recipeId": 1, "remark": "买番茄", "status": "not_started", "review": "", "imageUrl": "", "planDate": "2026-07-28" }
 ```
 响应：`MealPlan`（含 id、createdAt）
 
@@ -301,7 +323,7 @@ spring:
 #### 更新计划
 `PUT /api/meal-plans/{id}`
 
-请求体：同创建（完整 `MealPlan`）。响应：`MealPlan`
+请求体：同创建。响应：`MealPlan`
 
 #### 删除计划
 `DELETE /api/meal-plans/{id}`
@@ -311,16 +333,16 @@ spring:
 #### 计划关联的完整菜谱
 `GET /api/meal-plans/{id}/recipe`
 
-响应：`PlanRecipeDetailVO`
-```json
-{
-  "planId": 1, "remark": "今晚做", "status": "planned", "review": "", "planImageUrl": "", "planDate": "2026-07-27",
-  "recipeId": 1, "title": "番茄炒蛋", "recipeImageUrl": "https://...",
-  "steps": [ { "id": 1, "recipeId": 1, "stepNo": 0, "content": "打蛋", "imageUrl": "" } ],
-  "ingredients": [ { "name": "番茄", "quantity": "2", "unit": "个" } ],
-  "seasonings": [ { "name": "盐", "quantity": "5", "unit": "g" } ]
-}
-```
+响应：`PlanRecipeDetailVO`（含 plan 信息 + recipe 完整步骤/原料/调料）
+
+---
+
+### 前端 Meal Plan 交互
+
+- **周视图**：顶部 `<` `>` 切换周，显示 Mon–Sun 日期栏
+- 每个日期标注当天计划数量，点击日期快速为该天添加计划
+- 每条计划卡片内嵌 **Log 区域**（可展开）：状态切到 `done` 后自动生成 CookingLog，展开可编辑成果图片和评价
+- 无独立 Log 页面，全部融入周视图
 
 ---
 
@@ -386,6 +408,7 @@ minio:
 
 前端在计划卡片中通过下拉切换状态，后端 `PUT /api/meal-plans/{id}` 接收更新。
 **当 status 变为 `done` 时，后端自动创建一条 CookingLog 记录**（幂等：同一 plan 只创建一次）。
+CookingLog 在前端嵌入计划卡片内（可展开编辑），不在独立页面展示。
 
 ### CookingLog（烹饪日志）`cooking_log`
 

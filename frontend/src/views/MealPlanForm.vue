@@ -10,12 +10,19 @@ const isEdit = computed(() => route.name === 'MealPlanEdit')
 const recipes = ref([])
 const recipeId = ref(null)
 const planDate = ref(new Date().toISOString().slice(0, 10))
-const status = ref('planned')
+const status = ref('not_started')
 const remark = ref('')
 const review = ref('')
 const imageUrl = ref('')
 const saving = ref(false)
 const toast = ref('')
+
+const STATUSES = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'prepping', label: 'Prepping' },
+  { value: 'cooking', label: 'Cooking' },
+  { value: 'done', label: 'Done' }
+]
 
 function showToast(msg) {
   toast.value = msg
@@ -25,11 +32,17 @@ function showToast(msg) {
 onMounted(async () => {
   recipes.value = await getRecipes()
 
+  // 支持从 week view 点日期传入 ?date=yyyy-MM-dd
+  const dateParam = route.query.date
+  if (dateParam) {
+    planDate.value = dateParam
+  }
+
   if (isEdit.value) {
     const plan = await getMealPlanDetail(route.params.id)
     recipeId.value = plan.recipeId
     planDate.value = plan.planDate || ''
-    status.value = plan.status || 'planned'
+    status.value = plan.status || 'not_started'
     remark.value = plan.remark || ''
     review.value = plan.review || ''
     imageUrl.value = plan.imageUrl || ''
@@ -89,20 +102,13 @@ async function handleSubmit() {
     <div class="form-group">
       <label class="form-label">Status</label>
       <select v-model="status" class="form-input">
-        <option value="planned">Planned</option>
-        <option value="done">Done</option>
-        <option value="cancelled">Cancelled</option>
+        <option v-for="s in STATUSES" :key="s.value" :value="s.value">{{ s.label }}</option>
       </select>
     </div>
 
     <div class="form-group">
       <label class="form-label">Remark</label>
       <textarea v-model="remark" class="form-input" placeholder="e.g. Remember to buy green onions..." rows="2" />
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Review / Rating</label>
-      <input v-model="review" class="form-input" placeholder="e.g. 5 stars / Delicious" />
     </div>
 
     <div class="form-group">

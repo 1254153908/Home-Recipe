@@ -22,6 +22,9 @@ const toast = ref('')
 const aiContent = ref('')
 const aiRecognizing = ref(false)
 const showAiPanel = ref(false)
+const aiMode = ref('link')        // 'link' | 'image'
+const aiImageFiles = ref([])      // 批量选择的图片 { file, previewUrl }
+const aiImagePreviews = ref([])   // 预览 URL 列表
 
 // Image upload
 const uploading = ref({})
@@ -81,36 +84,71 @@ function removeSeasoning(index) {
   seasonings.value.splice(index, 1)
 }
 
-async function handleAiRecognize() {
-  if (!aiContent.value.trim()) {
-    showToast('Enter a URL or content')
-    return
+function applyDraft(result, linkUrl) {
+  title.value = result.title || ''
+  imageUrl.value = result.imageUrl || ''
+  sourceUrl.value = linkUrl || ''
+  if (result.steps?.length) {
+    steps.value = result.steps.map(s => ({ content: s.content || '', imageUrl: s.imageUrl || '' }))
   }
+  if (result.ingredients?.length) {
+    ingredients.value = result.ingredients.map(i => ({ name: i.name || '', quantity: i.quantity || '', unit: i.unit || '' }))
+  }
+  if (result.seasonings?.length) {
+    seasonings.value = result.seasonings.map(s => ({ name: s.name || '', quantity: s.quantity || '', unit: s.unit || '' }))
+  }
+}
+
+async function handleAiRecognize() {
   aiRecognizing.value = true
   try {
-    const result = await aiRecognize({
-      sourceType: sourceType.value || 'link',
-      content: aiContent.value.trim()
-    })
-    title.value = result.title || ''
-    imageUrl.value = result.imageUrl || ''
-    sourceUrl.value = aiContent.value.trim()
-    if (result.steps?.length) {
-      steps.value = result.steps.map(s => ({ content: s.content || '', imageUrl: s.imageUrl || '' }))
+    if (aiMode.value === 'link') {
+      // 链接模式
+      if (!aiContent.value.trim()) { showToast('Enter a URL'); return }
+      const result = await aiRecognize({
+        sourceType: 'link',
+        content: aiContent.value.trim()
+      })
+      applyDraft(result, aiContent.value.trim())
+    } else {
+      // 图片模式：批量选择 → base64 → Vision 识别
+      if (aiImagePreviews.value.length === 0) { showToast('Select at least one image'); return }
+      // 取第一张识别（可扩展为逐张合并结果）
+      const file = aiImageFiles.value[0]
+      if (!file) { showToast('No image selected'); return }
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const result = await aiRecognize({
+        sourceType: 'image',
+        content: base64
+      })
+      applyDraft(result, '')
     }
-    if (result.ingredients?.length) {
-      ingredients.value = result.ingredients.map(i => ({ name: i.name || '', quantity: i.quantity || '', unit: i.unit || '' }))
-    }
-    if (result.seasonings?.length) {
-      seasonings.value = result.seasonings.map(s => ({ name: s.name || '', quantity: s.quantity || '', unit: s.unit || '' }))
-    }
-    showToast('Recognition complete, form filled')
+    showToast('Recognition complete')
     showAiPanel.value = false
   } catch {
     showToast('Recognition failed, check AI service')
   } finally {
     aiRecognizing.value = false
   }
+}
+
+function handleImageSelect(e) {
+  const files = Array.from(e.target.files || [])
+  if (files.length === 0) return
+  aiImageFiles.value = files
+  // 生成预览 URL（blob, 不存数据库）
+  aiImagePreviews.value = files.map(f => URL.createObjectURL(f))
+}
+
+function clearImages() {
+  aiImagePreviews.value.forEach(url => URL.revokeObjectURL(url))
+  aiImagePreviews.value = []
+  aiImageFiles.value = []
 }
 
 onMounted(async () => {
@@ -176,19 +214,49 @@ async function handleSubmit() {
       </button>
 
       <div v-if="showAiPanel" class="ai-panel">
-        <div class="form-group">
-          <label class="form-label">Source type</label>
-          <select v-model="sourceType" class="form-input">
-            <option value="link">Web link</option>
-            <option value="video">Video link</option>
-            <option value="image">Image link</option>
-          </select>
+        <!-- Mode tabs -->
+        <div class="ai-tabs">
+          <button class="ai-tab" :class="{ active: aiMode === 'link' }" @click="aiMode = 'link'">Link</button>
+          <button class="ai-tab" :class="{ active: aiMode === 'image' }" @click="aiMode = 'image'">Image</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Paste link</label>
-          <div class="ai-input-row">
-            <input v-model="aiContent" class="form-input" placeholder="https://..." />
-            <button class="btn btn-accent btn-sm" :disabled="aiRecognizing || !aiContent.trim()" @click="handleAiRecognize">
+
+        <!-- Link mode -->
+        <div v-if="aiMode === 'link'">
+          <div class="form-group">
+            <label class="form-label">Paste recipe URL</label>
+            <p class="ai-hint">Supports xiachufang.com (fast HTML parsing, no LLM cost) and other recipe sites</p>
+            <div class="ai-input-row">
+              <input v-model="aiContent" class="form-input" placeholder="https://www.xiachufang.com/recipe/..." />
+              <button class="btn btn-accent btn-sm" :disabled="aiRecognizing || !aiContent.trim()" @click="handleAiRecognize">
+                {{ aiRecognizing ? '...' : 'Recognize' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image mode -->
+        <div v-if="aiMode === 'image'">
+          <div class="form-group">
+            <label class="form-label">Select food photos</label>
+            <p class="ai-hint">Take photos of recipe screenshots (Xiaohongshu, TikTok, etc.) — images are used for recognition only, not saved</p>
+            <label class="img-select-area" :class="{ hasFiles: aiImagePreviews.length > 0 }">
+              <input type="file" accept="image/*" multiple @change="handleImageSelect" style="display:none" />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+              </svg>
+              <span>{{ aiImagePreviews.length > 0 ? `${aiImagePreviews.length} image(s) selected` : 'Tap to select from gallery' }}</span>
+            </label>
+            <div v-if="aiImagePreviews.length > 0" class="img-previews">
+              <div class="preview-thumb" v-for="(url, i) in aiImagePreviews" :key="i">
+                <img :src="url" />
+              </div>
+            </div>
+          </div>
+          <div class="ai-actions">
+            <button v-if="aiImagePreviews.length > 0" class="btn btn-outline btn-sm" @click="clearImages">Clear</button>
+            <button class="btn btn-accent btn-sm" :disabled="aiRecognizing || aiImagePreviews.length === 0" @click="handleAiRecognize">
               {{ aiRecognizing ? 'Recognizing...' : 'Recognize' }}
             </button>
           </div>
@@ -309,6 +377,82 @@ async function handleSubmit() {
   background: var(--card-bg);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
+}
+
+.ai-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.ai-tab {
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.ai-tab.active {
+  background: var(--text-primary);
+  color: var(--text-white);
+}
+
+.ai-hint {
+  font-size: 11px;
+  color: var(--text-placeholder);
+  margin-bottom: 6px;
+}
+
+.img-select-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px;
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-placeholder);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.img-select-area:hover,
+.img-select-area.hasFiles {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.img-previews {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+.preview-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .ai-input-row {
