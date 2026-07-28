@@ -9,8 +9,10 @@
 - Java 8 + Spring Boot 2.7.18
 - MyBatis-Plus 3.5.5（ORM）
 - MySQL 8（`com.mysql.cj.jdbc.Driver`）
+- MinIO 8.5（对象存储，可选）
 - Lombok
 - 构建工具：Maven
+- AI 服务：Python 3.10+ / FastAPI / OpenAI SDK / BeautifulSoup4
 
 ## 基础信息
 
@@ -23,8 +25,19 @@
 ### 运行（本地）
 
 ```bash
+# Java 后端
 mvn spring-boot:run
+
+# AI 识别服务（Python FastAPI）
+cd backend/python
+pip install -r requirements.txt
+# 可选：编辑 .env 配置 LLM（OpenAI / 阿里云 DashScope 等兼容 API）
+# AI_MODE=mock 时无需 LLM，使用内置关键词匹配
+cp .env.example .env   # 如有
+python -m app.main
 ```
+
+> **AI 模式切换**：编辑 `.env` 中 `AI_MODE=mock` 或 `AI_MODE=openai`。mock 模式零依赖、零费用；openai 模式需配置 API key，能真正识别任意链接里的菜谱（包括步骤配图 URL）。
 
 数据库配置见 `src/main/resources/application.yml`：
 
@@ -172,16 +185,23 @@ spring:
 
 请求体：
 ```json
-{ "sourceType": "link", "content": "https://.../video-or-image" }
+{ "sourceType": "link", "content": "https://.../recipe-page" }
 ```
-> 后端转发到 mock 服务 `http://localhost:5000/recognize`（配置项 `ai.mock-service.url`）。本 demo 仅作透传，需另起 Flask 服务。
+
+> **识别模式**（由 Python 服务 `config.yaml` 的 `AI_MODE` 控制）：
+> - **mock**（默认）：关键词匹配，URL 含 "tomato"/"tofu"/"rib" 等关键词时返回预置菜谱
+> - **openai**：通用方案 — Python 服务抓取页面 HTML → 提取纯文本 → 发给 GPT-4o（或兼容 API）→ 返回结构化菜谱 JSON（含标题、原料、调料、步骤及步骤配图 URL）
+>
+> 使用 openai 模式需在 `backend/python/.env` 中配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL`。
+>
+> AI 服务源码见 `backend/python/`。
 
 响应：`RecipeDraft`（可用来预填创建表单）
 ```json
 {
   "title": "识别出的菜名",
-  "imageUrl": "https://...",
-  "steps": [ { "content": "...", "imageUrl": "" } ],
+  "imageUrl": "https://...（页面封面图）",
+  "steps": [ { "content": "...", "imageUrl": "https://...（该步骤配图）" } ],
   "ingredients": [ { "name": "番茄", "quantity": "2", "unit": "个" } ],
   "seasonings": [ { "name": "盐", "quantity": "5", "unit": "g" } ]
 }
@@ -266,17 +286,118 @@ spring:
 
 ---
 
+### 文件上传 `/api/upload`
+
+#### 上传图片
+`POST /api/upload`
+
+请求：`multipart/form-data`，字段名 `file`
+
+响应：
+```json
+{ "url": "http://localhost:9000/homerecipe/abc123.jpg" }
+```
+
+**存储策略：**
+1. 文件先保存到本地 `uploads/` 目录
+2. 若 `minio.enabled=true`，自动转存到 MinIO 对象存储，返回 MinIO URL
+3. 若 MinIO 未启用，返回本地 URL `/uploads/xxx.jpg`（通过 `WebMvcConfig` 映射为静态资源）
+
+MinIO 配置见 `application.yml`：
+```yaml
+minio:
+  enabled: false       # 设为 true 启用
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: homerecipe
+```
+
+---
+
 ## 前端对接注意事项
 
-1. **跨域（CORS）**：后端**未配置 CORS**。前端若跑在另一个端口（如 3000/5173），浏览器会被拦截。开发期建议加 `WebMvcConfigurer` 放开 CORS，或用前端 dev server 代理把 `/api` 转到 `localhost:4993`。
+1. **跨域（CORS）**：开发期前端 Vite dev server 已配置 `/api` 代理到 `localhost:4993`，无需额外处理。
 2. **无鉴权**：`userId` 直接当 query 参数传（默认 `0`），没有登录/Token。收藏、我的收藏等接口需自行在前端维护当前用户 id。
 3. **空响应**：删除、收藏、取消收藏类接口返回 **HTTP 200 + 空 body**（不是 204），前端不要解析 JSON。
 4. **`/api/ingredients` 与 `/api/seasonings` 的新建**用 `?name=` query 参数，不是 POST body。
-5. **AI 识菜**依赖外部 mock 服务（默认 `localhost:5000/recognize`），未启动时该接口不可用。
+5. **AI 识菜**依赖 Python FastAPI 服务（源码 `backend/python/`），未启动时该接口不可用。
 6. **日期格式**：`planDate` 为 `yyyy-MM-dd`；`createdAt` 为 `yyyy-MM-dd'T'HH:mm:ss`（LocalDateTime 默认序列化）。
+7. **图片上传**：前端通过 `<input type="file">` 选择照片后调 `POST /api/upload`（multipart），拿到返回 URL 后填入表单。
 
 ## 数据库表一览
 
-`recipe`、`recipe_step`、`recipe_ingredient`、`recipe_seasoning`、`recipe_favorite`、`ingredient`、`seasoning`、`meal_plan`
+`recipe`、`recipe_step`、`recipe_ingredient`、`recipe_seasoning`、`recipe_favorite`、`ingredient`、`seasoning`、`meal_plan`、`cooking_log`
 
 字段详情见上方「数据模型」。Java 字段为驼峰，数据库列为下划线（MyBatis-Plus 已开启 `map-underscore-to-camel-case`）。
+
+---
+
+## 烹饪日志 & 计划状态流转
+
+### 膳食计划状态
+
+`meal_plan.status` 使用以下四个枚举值：
+
+| status | 含义 |
+|---|---|
+| `not_started` | 未开始 |
+| `prepping` | 配菜中 |
+| `cooking` | 烹饪中 |
+| `done` | 已完成 |
+
+前端在计划卡片中通过下拉切换状态，后端 `PUT /api/meal-plans/{id}` 接收更新。
+**当 status 变为 `done` 时，后端自动创建一条 CookingLog 记录**（幂等：同一 plan 只创建一次）。
+
+### CookingLog（烹饪日志）`cooking_log`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Long | 主键，自增 |
+| planId | Long | 关联膳食计划 |
+| recipeId | Long | 关联菜谱 |
+| recipeTitle | String | 菜谱名称（冗余） |
+| planDate | String(Date) | 计划日期 |
+| completedAt | String(DateTime) | 完成时间 |
+| imageUrl | String | 成果图片 |
+| review | String | 评价/心得 |
+| createdAt | String(DateTime) | 创建时间 |
+
+### CookingLog API `/api/cooking-logs`
+
+#### 获取日志列表
+`GET /api/cooking-logs`
+
+响应：`CookingLog[]`
+```json
+[
+  {
+    "id": 1, "planId": 1, "recipeId": 1, "recipeTitle": "番茄炒蛋",
+    "planDate": "2026-07-27", "completedAt": "2026-07-27T18:30:00",
+    "imageUrl": "https://...", "review": "味道不错",
+    "createdAt": "2026-07-27T18:30:00"
+  }
+]
+```
+
+#### 创建日志
+`POST /api/cooking-logs`
+
+请求体：
+```json
+{
+  "planId": 1, "recipeId": 1, "recipeTitle": "番茄炒蛋",
+  "planDate": "2026-07-27", "completedAt": "2026-07-27T18:30:00"
+}
+```
+
+#### 更新日志（成果图片 / 评价）
+`PUT /api/cooking-logs/{id}`
+
+请求体：
+```json
+{ "imageUrl": "https://...", "review": "第一次做，很成功！" }
+```
+
+#### 删除日志
+`DELETE /api/cooking-logs/{id}`

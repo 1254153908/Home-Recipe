@@ -1,0 +1,134 @@
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getRecipes, createMealPlan, updateMealPlan, getMealPlanDetail } from '../api'
+
+const route = useRoute()
+const router = useRouter()
+const isEdit = computed(() => route.name === 'MealPlanEdit')
+
+const recipes = ref([])
+const recipeId = ref(null)
+const planDate = ref(new Date().toISOString().slice(0, 10))
+const status = ref('planned')
+const remark = ref('')
+const review = ref('')
+const imageUrl = ref('')
+const saving = ref(false)
+const toast = ref('')
+
+function showToast(msg) {
+  toast.value = msg
+  setTimeout(() => { toast.value = '' }, 2000)
+}
+
+onMounted(async () => {
+  recipes.value = await getRecipes()
+
+  if (isEdit.value) {
+    const plan = await getMealPlanDetail(route.params.id)
+    recipeId.value = plan.recipeId
+    planDate.value = plan.planDate || ''
+    status.value = plan.status || 'planned'
+    remark.value = plan.remark || ''
+    review.value = plan.review || ''
+    imageUrl.value = plan.imageUrl || ''
+  }
+})
+
+async function handleSubmit() {
+  if (!recipeId.value) {
+    showToast('Please choose a recipe')
+    return
+  }
+  saving.value = true
+  try {
+    const data = {
+      recipeId: Number(recipeId.value),
+      planDate: planDate.value,
+      status: status.value,
+      remark: remark.value.trim(),
+      review: review.value.trim(),
+      imageUrl: imageUrl.value.trim()
+    }
+    if (isEdit.value) {
+      await updateMealPlan(route.params.id, data)
+      showToast('Updated')
+    } else {
+      await createMealPlan(data)
+      showToast('Created')
+    }
+    router.replace('/plans')
+  } catch {
+    showToast('Save failed')
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="page">
+    <div class="page-header">
+      <h1>{{ isEdit ? 'Edit Meal Plan' : 'New Meal Plan' }}</h1>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Recipe *</label>
+      <select v-model="recipeId" class="form-input">
+        <option :value="null" disabled>Choose a recipe</option>
+        <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.title }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Plan date</label>
+      <input v-model="planDate" type="date" class="form-input" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select v-model="status" class="form-input">
+        <option value="planned">Planned</option>
+        <option value="done">Done</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Remark</label>
+      <textarea v-model="remark" class="form-input" placeholder="e.g. Remember to buy green onions..." rows="2" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Review / Rating</label>
+      <input v-model="review" class="form-input" placeholder="e.g. 5 stars / Delicious" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Image URL</label>
+      <input v-model="imageUrl" class="form-input" placeholder="https://..." />
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-outline" @click="router.back">Cancel</button>
+      <button class="btn btn-primary btn-block" :disabled="saving" @click="handleSubmit">
+        {{ saving ? 'Saving...' : 'Save' }}
+      </button>
+    </div>
+
+    <div v-if="toast" class="toast">{{ toast }}</div>
+  </div>
+</template>
+
+<style scoped>
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.form-actions .btn-block {
+  flex: 1;
+}
+</style>

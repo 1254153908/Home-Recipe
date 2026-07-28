@@ -80,19 +80,18 @@ uploads/
 # ========== CodeBuddy（项目数据） ==========
 .codebuddy/
 
-# ========== 文档（保留 README + 规约文件） ==========
+# ========== 文档（仅保留 README） ==========
 *.md
-!../README.md
+!README.md
 !AGENTS.md
 !openspec/**/*.md
-openspec/changes/archive/
 
 # ========== 测试文件 ==========
 test/
 
 # ========== Docker 数据卷 ==========
-docker/**/data/
-docker/**/sdi/
+backend/docker/**/data/
+backend/docker/**/sdi/
 docker/**/*.sdi
 docker/**/*.meta
 docker/**/*.1

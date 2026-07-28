@@ -8,7 +8,7 @@ services:
       # root 密码
       MYSQL_ROOT_PASSWORD: eng123
       # 初始化数据库
-      MYSQL_DATABASE: eng-cloud
+      MYSQL_DATABASE: home_recipe
     ports:
       - "3307:3306"
     volumes:

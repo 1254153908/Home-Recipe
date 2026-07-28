@@ -33,7 +33,7 @@ DROP TABLE IF EXISTS recipe;
 CREATE TABLE recipe (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   title       VARCHAR(128) NOT NULL,
-  image_url   VARCHAR(512) DEFAULT NULL,
+  image_url   VARCHAR(1024) DEFAULT NULL,
   source_type VARCHAR(16)  DEFAULT 'manual' COMMENT 'manual / ai',
   source_url  VARCHAR(512) DEFAULT NULL,
   created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
@@ -135,4 +135,21 @@ INSERT INTO recipe_favorite (recipe_id, user_id) VALUES (1, 0);
 
 INSERT INTO meal_plan (recipe_id, remark, status, review, plan_date) VALUES
   (1, '午餐', 'done', '很下饭', '2026-07-27'),
-  (2, '晚餐', 'planned', NULL, '2026-07-28');
+  (2, '晚餐', 'not_started', NULL, '2026-07-28');
+
+-- ============ 烹饪日志（cooking_log）============
+-- 当膳食计划状态变为 done 时，自动生成一条日志记录
+DROP TABLE IF EXISTS cooking_log;
+CREATE TABLE cooking_log (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  plan_id       BIGINT       NOT NULL COMMENT '关联的膳食计划ID',
+  recipe_id     BIGINT       NOT NULL COMMENT '关联的菜谱ID',
+  recipe_title  VARCHAR(200) DEFAULT NULL COMMENT '菜谱名称（冗余）',
+  plan_date     DATE         DEFAULT NULL COMMENT '计划日期',
+  completed_at  DATETIME     DEFAULT NULL COMMENT '完成时间',
+  image_url     VARCHAR(500) DEFAULT NULL COMMENT '成果图片',
+  review        VARCHAR(1000) DEFAULT NULL COMMENT '评价/心得',
+  created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_plan (plan_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -5,9 +5,9 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 真实 MySQL 连接，请按你的环境修改
-    url: jdbc:mysql://localhost:3306/home_recipe?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3307/home_recipe?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
-    password: root
+    password: eng123
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/*.xml
@@ -18,7 +18,19 @@ mybatis-plus:
     db-config:
       id-type: auto
 
-# AI 识别假数据服务（Flask）地址
+# AI 识别服务（Python FastAPI）地址
 ai:
   mock-service:
-    url: http://localhost:5000/recognize
+    url: http://localhost:5000/api/recognize
+
+# 文件上传配置
+upload:
+  local-dir: uploads
+
+# MinIO 对象存储（默认不启用，留空走本地存储）
+minio:
+  enabled: false
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: homerecipe
