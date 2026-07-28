@@ -50,7 +50,7 @@ services:
       # 时区上海
       TZ: Asia/Shanghai
       # 管理后台用户名
-      MINIO_ROOT_USER: lovedariy
+      MINIO_ROOT_USER: homecooker
       # 管理后台密码，最小8个字符
       MINIO_ROOT_PASSWORD: 12345678
       # https需要指定域名
@@ -71,7 +71,7 @@ services:
     privileged: true
     # network_mode: "host"
 
-  # 一次性初始化容器：MinIO 启动后自动把 contract 桶设为公开读
+  # 一次性初始化容器：MinIO 启动后自动创建所需桶并设为公开读
   # 复用已本地存在的 minio 镜像（内含 /usr/bin/mc），无需联网拉取
   # 每执行 `docker compose up` 时运行一次；桶策略写在数据卷中，重建数据卷也会重新生效
   minio-init:
@@ -82,10 +82,13 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       - |
-        until mc alias set local http://minio:9000 lovedariy 12345678 2>/dev/null; do
+        until mc alias set local http://minio:9000 homecooker 12345678 2>/dev/null; do
           echo "等待 MinIO 启动..."; sleep 2;
         done
         mc mb -p local/contract 2>/dev/null || true
         mc anonymous set public local/contract
         echo "contract 桶已设为公开读 (public)"
+        mc mb -p local/recipe 2>/dev/null || true
+        mc anonymous set public local/recipe
+        echo "recipe 桶已设为公开读 (public)"
     restart: "no"
