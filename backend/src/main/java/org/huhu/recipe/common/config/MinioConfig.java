@@ -2,18 +2,13 @@ package org.huhu.recipe.common.config;
 
 import io.minio.MinioClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@EnableConfigurationProperties(MinioProperties.class)
 public class MinioConfig {
-
-    @Bean
-    @ConfigurationProperties(prefix = "minio")
-    public MinioProperties minioProperties() {
-        return new MinioProperties();
-    }
 
     @Bean
     @ConditionalOnProperty(name = "minio.enabled", havingValue = "true")
