@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.huhu.recipe.mapper.MealPlanMapper">
+<mapper namespace="org.huhu.recipe.mealplan.mapper.MealPlanMapper">
 
-    <!-- 主查询：计划 + 关联菜谱 -->
-    <resultMap id="PlanRecipeDetailMap" type="org.huhu.recipe.dto.PlanRecipeDetailVO">
+    <resultMap id="PlanRecipeDetailMap" type="org.huhu.recipe.mealplan.dto.PlanRecipeDetailVO">
         <id column="plan_id" property="planId"/>
         <result column="plan_remark" property="remark"/>
         <result column="plan_status" property="status"/>
@@ -14,14 +13,11 @@
         <result column="recipe_id" property="recipeId"/>
         <result column="title" property="title"/>
         <result column="recipe_image" property="recipeImageUrl"/>
-        <!-- 嵌套子查询：步骤（每步独立，可带图片） -->
-        <collection property="steps" ofType="org.huhu.recipe.entity.RecipeStep"
+        <collection property="steps" ofType="org.huhu.recipe.recipe.entity.RecipeStep"
                     select="selectStepsByRecipe" column="recipe_id"/>
-        <!-- 嵌套子查询：原料 -->
-        <collection property="ingredients" ofType="org.huhu.recipe.dto.ItemView"
+        <collection property="ingredients" ofType="org.huhu.recipe.common.dto.ItemView"
                     select="selectIngredientsByRecipe" column="recipe_id"/>
-        <!-- 嵌套子查询：调料 -->
-        <collection property="seasonings" ofType="org.huhu.recipe.dto.ItemView"
+        <collection property="seasonings" ofType="org.huhu.recipe.common.dto.ItemView"
                     select="selectSeasoningsByRecipe" column="recipe_id"/>
     </resultMap>
 
@@ -41,8 +37,7 @@
         WHERE mp.id = #{planId}
     </select>
 
-    <!-- 步骤：每步一行，可带图片 -->
-    <select id="selectStepsByRecipe" resultType="org.huhu.recipe.entity.RecipeStep">
+    <select id="selectStepsByRecipe" resultType="org.huhu.recipe.recipe.entity.RecipeStep">
         SELECT id,
                recipe_id  AS recipeId,
                step_no    AS stepNo,
@@ -53,8 +48,7 @@
         ORDER BY step_no
     </select>
 
-    <!-- 原料：菜谱 -> 食材明细 -> 食材名称 -->
-    <select id="selectIngredientsByRecipe" resultType="org.huhu.recipe.dto.ItemView">
+    <select id="selectIngredientsByRecipe" resultType="org.huhu.recipe.common.dto.ItemView">
         SELECT i.name AS name,
                ri.quantity AS quantity,
                ri.unit AS unit
@@ -63,8 +57,7 @@
         WHERE ri.recipe_id = #{recipeId}
     </select>
 
-    <!-- 调料：菜谱 -> 调料明细 -> 调料名称 -->
-    <select id="selectSeasoningsByRecipe" resultType="org.huhu.recipe.dto.ItemView">
+    <select id="selectSeasoningsByRecipe" resultType="org.huhu.recipe.common.dto.ItemView">
         SELECT s.name AS name,
                rs.quantity AS quantity,
                rs.unit AS unit

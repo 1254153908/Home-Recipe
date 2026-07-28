@@ -1,6 +1,6 @@
 # HomeRecipe 后端 API 文档
 
-家常菜谱管理后端，提供菜谱（含步骤/原料/调料）的增删改查、收藏、AI 识菜草稿生成，以及膳食计划管理。
+家常菜谱管理后端，提供菜谱（含步骤/原料/调料）的增删改查、收藏、AI 识菜草稿生成，以及膳食计划与烹饪日志管理。
 
 > 本文件供前端开发对接使用。所有接口均已基于源码核对。
 
@@ -13,6 +13,44 @@
 - Lombok
 - 构建工具：Maven
 - AI 服务：Python 3.10+ / FastAPI / OpenAI SDK / BeautifulSoup4
+
+## 项目结构（单体 + 模块分层）
+
+```
+src/main/java/org/huhu/recipe/
+├── HomeRecipeApplication.java          ← 启动类
+│
+├── common/                             ← 公共基础设施（跨模块共享）
+│   ├── config/                         → MinioConfig, MyBatisPlusConfig, RestTemplateConfig, WebMvcConfig
+│   ├── controller/                     → FileUploadController（文件上传）
+│   ├── service/                        → FileUploadService
+│   └── dto/                            → AiRecognizeRequest, RecipeDraft, StepInput, ItemInput, ItemView
+│
+├── recipe/                             ← 菜谱核心（CRUD + AI 识别 + 收藏）
+│   ├── controller/                     → RecipeController
+│   ├── service/                        → RecipeService, AiRecognitionService
+│   ├── entity/                         → Recipe, RecipeStep, RecipeIngredient, RecipeSeasoning, RecipeFavorite
+│   ├── mapper/                         → 对应 5 个 Mapper 接口
+│   └── dto/                            → RecipeCreateRequest, RecipeDetail
+│
+├── mealplan/                           ← 膳食计划
+│   ├── controller/ + service/ + entity/ + mapper/ + dto/
+│
+├── cookinglog/                         ← 烹饪日志
+│   ├── controller/ + service/ + entity/ + mapper/
+│
+├── ingredient/                         ← 食材字典
+│   ├── controller/ + service/ + entity/ + mapper/
+│
+├── seasoning/                          ← 调料字典
+│   ├── controller/ + service/ + entity/ + mapper/
+│
+├── social/                             ← ⏳ 待实现（点赞、评论、社交互动）
+│
+└── user/                               ← ⏳ 待实现（注册、登录、JWT 认证）
+```
+
+> **模块间调用规则**：公共模块 `common/` 被所有业务模块引用；业务模块（如 `mealplan/`）可直接注入其他业务模块的 Service 接口（如 `CookingLogMapper`、`RecipeMapper`），不需要跨模块代理。
 
 ## 基础信息
 
@@ -44,12 +82,12 @@ python -m app.main
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/home_recipe?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3307/home_recipe?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
-    password: root
+    password: eng123
 ```
 
-> ⚠️ 注意：`docker/docker-compose.yml` 起的是 MySQL **3307 端口 / 库名 `eng-cloud` / 密码 `eng123`**，与 `application.yml` 默认不一致。用 Docker 起库时需手动改 `application.yml` 或 compose 文件对齐。
+> Docker 环境：`docker/docker-compose.yml` 提供 MySQL **3307 端口 / 库名 `home_recipe` / 密码 `eng123`**，与 `application.yml` 默认一致。
 
 ## 数据模型
 

@@ -11,7 +11,7 @@ spring:
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/*.xml
-  type-aliases-package: org.huhu.recipe.entity
+  type-aliases-package: org.huhu.recipe.recipe.entity,org.huhu.recipe.mealplan.entity,org.huhu.recipe.cookinglog.entity,org.huhu.recipe.ingredient.entity,org.huhu.recipe.seasoning.entity
   configuration:
     map-underscore-to-camel-case: true
   global-config:
@@ -21,7 +21,7 @@ mybatis-plus:
 # AI 识别服务（Python FastAPI）地址
 ai:
   mock-service:
-    url: http://localhost:5000/api/recognize
+    url: http://localhost:5000/recognize
 
 # 文件上传配置
 upload:
