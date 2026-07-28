@@ -11,4 +11,5 @@ async def recognize(request: RecognizeRequest) -> RecipeDraft:
     return await recognize_service.recognize(
         source_type=request.source_type,
         content=request.content,
+        url_hint=request.url_hint,
     )

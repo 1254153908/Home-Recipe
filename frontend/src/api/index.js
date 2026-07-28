@@ -42,7 +42,11 @@ export function getFavoriteRecipes() {
 }
 
 export function aiRecognize(data) {
-  return api.post('/recipes/ai-recognize', data).then(r => r.data)
+  // urlHint: 自动从 URL 提取域名，辅助 Python 选择解析策略
+  if (!data.urlHint && data.sourceType === 'link') {
+    try { data.urlHint = new URL(data.content).hostname } catch {}
+  }
+  return api.post('/recipes/ai-recognize', data, { timeout: 60000 }).then(r => r.data)
 }
 
 // --- Ingredient ---

@@ -2,11 +2,14 @@ package org.huhu.recipe.recipe.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.huhu.recipe.common.dto.ItemInput;
 import org.huhu.recipe.common.dto.ItemView;
 import org.huhu.recipe.common.dto.StepInput;
+import org.huhu.recipe.common.service.FileUploadService;
 import org.huhu.recipe.ingredient.entity.Ingredient;
 import org.huhu.recipe.ingredient.service.IngredientService;
 import org.huhu.recipe.recipe.dto.RecipeCreateRequest;
@@ -45,6 +48,8 @@ public class RecipeServiceImpl implements RecipeService {
     private IngredientService ingredientService;
     @Autowired
     private SeasoningService seasoningService;
+    @Autowired
+    private FileUploadService fileUploadService;
 
     @Override
     public RecipeDetail create(RecipeCreateRequest request) {
@@ -85,6 +90,30 @@ public class RecipeServiceImpl implements RecipeService {
         if (recipe == null) {
             return null;
         }
+
+        // 封面图换了才删旧图
+        if (StringUtils.hasText(recipe.getImageUrl())
+                && !recipe.getImageUrl().equals(request.getImageUrl())) {
+            fileUploadService.delete(recipe.getImageUrl());
+        }
+
+        // 步骤图：收集新图的URL，删掉旧图但不在新图里的
+        Set<String> newStepUrls = new HashSet<>();
+        if (request.getSteps() != null) {
+            for (StepInput step : request.getSteps()) {
+                if (StringUtils.hasText(step.getImageUrl())) {
+                    newStepUrls.add(step.getImageUrl());
+                }
+            }
+        }
+        List<RecipeStep> oldSteps = loadSteps(id);
+        for (RecipeStep oldStep : oldSteps) {
+            if (StringUtils.hasText(oldStep.getImageUrl())
+                    && !newStepUrls.contains(oldStep.getImageUrl())) {
+                fileUploadService.delete(oldStep.getImageUrl());
+            }
+        }
+
         recipe.setTitle(request.getTitle());
         recipe.setImageUrl(request.getImageUrl());
         recipe.setSourceType(request.getSourceType());
@@ -99,6 +128,18 @@ public class RecipeServiceImpl implements RecipeService {
 
     @Override
     public void delete(Long id) {
+        // 删除前先清理图片（MinIO/本地）
+        Recipe recipe = recipeMapper.selectById(id);
+        if (recipe != null && StringUtils.hasText(recipe.getImageUrl())) {
+            fileUploadService.delete(recipe.getImageUrl());
+        }
+        List<RecipeStep> steps = loadSteps(id);
+        for (RecipeStep step : steps) {
+            if (StringUtils.hasText(step.getImageUrl())) {
+                fileUploadService.delete(step.getImageUrl());
+            }
+        }
+
         recipeMapper.deleteById(id);
         deleteItems(id);
         deleteSteps(id);
