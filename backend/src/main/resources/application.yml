@@ -39,3 +39,15 @@ minio:
   access-key: homecooker
   secret-key: 12345678
   bucket: recipe
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus    # 只暴露 healh 和 prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: homerecipe          # 所有指标自动带上应用名称

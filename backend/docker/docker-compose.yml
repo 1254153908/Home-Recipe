@@ -62,6 +62,7 @@ services:
       MINIO_COMPRESS_EXTENSIONS: ""
       # mime 类型 application/pdf 为空 所有类型均压缩
       MINIO_COMPRESS_MIME_TYPES: ""
+      MINIO_PROMETHEUS_AUTH_TYPE: "public"
     volumes:
       # 映射当前目录下的data目录至容器内/data目录
       - ../docker/minio/data:/data
