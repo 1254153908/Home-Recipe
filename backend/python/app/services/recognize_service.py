@@ -167,6 +167,47 @@ JSON 格式：
 # ============================================================
 class RecognizeService:
 
+    # ---------- 公共方法 ----------
+    def _parse_ingredient_text(self, text: str) -> tuple[str, str, str]:
+        """拆分原料字符串 → (quantity, unit, name)
+        支持两种格式:
+          - 数字在前: "500g 五花肉" → ("500", "g", "五花肉")
+          - 名称在前: "盐少许"     → ("少许", "", "盐")
+        """
+        m = re.match(
+            r"([\d.]+)\s*(克|勺|大勺|小勺|匙|汤匙|茶匙|大匙|小匙|只|个|根|把|块|片|条|碗|杯|少许|少量|适量|"
+            r"毫升|升|斤|两|磅|g|kg|ml|l|tbsp|tsp|cup)?\s*(.+)",
+            text, re.IGNORECASE
+        )
+        if m:
+            return m.group(1), (m.group(2) or m.group(3) or ""), m.group(3)
+
+        m = re.match(
+            r"(.+?)([\d.]+)\s*(克|勺|大勺|小勺|匙|汤匙|茶匙|大匙|小匙|只|个|根|把|块|片|条|碗|杯|少许|少量|适量|"
+            r"毫升|升|斤|两|磅|g|kg|ml|l|tbsp|tsp|cup)?$",
+            text, re.IGNORECASE
+        )
+        if m:
+            return m.group(2), (m.group(3) or ""), m.group(1).strip()
+
+        return "", "", text
+
+    def _is_seasoning(self, name: str) -> bool:
+        """判断原料名是否为调料"""
+        keywords = {
+            "油", "盐", "糖", "生抽", "老抽", "酱油", "醋", "料酒", "蚝油",
+            "淀粉", "生粉", "豆瓣酱", "甜面酱", "辣椒酱", "胡椒粉", "五香粉",
+            "鸡精", "味精", "香油", "芝麻油", "花椒", "八角", "桂皮", "姜", "蒜", "葱",
+        }
+        return any(kw in name for kw in keywords)
+
+    def _extract_img_url(self, img) -> str:
+        """从 img 标签提取图片 URL，补全协议头"""
+        src = img.get("src") or img.get("data-src") or ""
+        if src.startswith("//"):
+            src = "https:" + src
+        return src
+
     # ---------- Mock ----------
     def recognize_mock(self, source_type: str, content: str) -> RecipeDraft:
         logger.info("Mock recognizing: sourceType=%s, content=%.80s", source_type, content)
@@ -189,17 +230,11 @@ class RecognizeService:
     # 策略1: 下厨房解析（优先 JSON-LD，回退 HTML 选择器）
     # ================================================================
     async def recognize_xiachufang(self, url: str) -> RecipeDraft:
-        """下厨房菜谱解析：优先从 JSON-LD 结构化数据提取，回退到 HTML 选择器"""
-        logger.info("=" * 60)
-        logger.info("[下厨房] 步骤1/7 - 开始解析: %s", url)
 
         # ---------- 步骤1: 抓取页面 ----------
         # PC 版(www)有反爬验证，直接请求移动版(m)
         fetch_url = url.replace("www.xiachufang.com", "m.xiachufang.com")
-        if fetch_url != url:
-            logger.info("[下厨房] 步骤1/7 - URL 转换为移动版: %s", fetch_url)
 
-        logger.info("[下厨房] 步骤1/7 - 抓取页面 HTML...")
         async with httpx.AsyncClient(timeout=settings.FETCH_TIMEOUT, follow_redirects=False) as client:
             try:
                 resp = await client.get(fetch_url, headers={
@@ -208,17 +243,14 @@ class RecognizeService:
                 })
                 resp.raise_for_status()
                 html = resp.text
-                logger.info("[下厨房] 步骤1/7 - 抓取成功, 状态码=%d, HTML长度=%d字符",
-                           resp.status_code, len(html))
+
             except Exception as e:
-                logger.error("[下厨房] 步骤1/7 - 抓取失败: %s", e)
                 return RecipeDraft()
 
         # ---------- 步骤2: 优先从 JSON-LD 提取 ----------
-        logger.info("[下厨房] 步骤2/7 - 尝试 JSON-LD 结构化数据提取...")
+
         soup = BeautifulSoup(html, "html.parser")
         page_title = soup.title.get_text(strip=True) if soup.title else "无"
-        logger.info("[下厨房] 步骤2/7 - 页面标题: %s", page_title)
 
         ld_json = soup.find("script", type="application/ld+json")
         if ld_json and ld_json.string:
@@ -227,12 +259,11 @@ class RecognizeService:
                 if isinstance(ld_data, list):
                     ld_data = ld_data[0]
                 if ld_data.get("@type") == "Recipe":
-                    logger.info("[下厨房] 步骤2/7 - JSON-LD 提取成功, 菜名=%s", ld_data.get("name", ""))
                     return self._parse_ld_json(ld_data, soup)
             except json.JSONDecodeError:
-                logger.warning("[下厨房] 步骤2/7 - JSON-LD 解析失败, 回退 HTML 选择器")
+                logger.warning("JSON-LD 解析失败, 回退 HTML 选择器")
         else:
-            logger.info("[下厨房] 步骤2/7 - 未找到 JSON-LD, 回退 HTML 选择器")
+            logger.info("未找到 JSON-LD, 回退 HTML 选择器")
 
         # ---------- 步骤3-7: HTML 选择器回退 ----------
         logger.info("[下厨房] 步骤3/7 - 提取菜名...")
@@ -245,17 +276,13 @@ class RecognizeService:
             title_tag = soup.select_one(sel)
             if title_tag:
                 title = title_tag.get_text(strip=True)
-                logger.info("[下厨房] 步骤3/7 - 匹配选择器 '%s' → 菜名: %s", sel, title)
                 break
         if not title:
-            logger.warning("[下厨房] 步骤3/7 - 未匹配到菜名, 尝试的选择器: %s", title_selectors)
             h1 = soup.select_one("h1")
             if h1:
                 title = h1.get_text(strip=True)
-                logger.info("[下厨房] 步骤3/7 - 降级使用第一个 h1 → 菜名: %s", title)
 
         # ---------- 步骤4: 提取封面图 ----------
-        logger.info("[下厨房] 步骤4/7 - 提取封面图...")
         image_url = ""
         cover_selectors = [
             ".cover img", ".recipe-cover img", "img.cover-photo", "img[itemprop='image']",
@@ -264,10 +291,7 @@ class RecognizeService:
         for sel in cover_selectors:
             cover_img = soup.select_one(sel)
             if cover_img:
-                image_url = cover_img.get("src") or cover_img.get("data-src") or ""
-                if image_url.startswith("//"):
-                    image_url = "https:" + image_url
-                logger.info("[下厨房] 步骤4/7 - 匹配选择器 '%s' → 封面图: %.60s...", sel, image_url)
+                image_url = self._extract_img_url(cover_img)
                 break
         if not image_url:
             logger.warning("[下厨房] 步骤4/7 - 未匹配到封面图, 尝试的选择器: %s", cover_selectors)
@@ -276,11 +300,6 @@ class RecognizeService:
         logger.info("[下厨房] 步骤5/7 - 提取用料...")
         ingredients: list[IngredientItem] = []
         seasonings: list[SeasoningItem] = []
-        seasoning_keywords = {
-            "油", "盐", "糖", "生抽", "老抽", "酱油", "醋", "料酒", "蚝油",
-            "淀粉", "生粉", "豆瓣酱", "甜面酱", "辣椒酱", "胡椒粉", "五香粉",
-            "鸡精", "味精", "香油", "芝麻油", "花椒", "八角", "桂皮", "姜", "蒜", "葱",
-        }
 
         ing_selectors = [
             ".ings tbody tr", ".ings tr", ".ingredients tbody tr", ".ingredients tr",
@@ -291,10 +310,9 @@ class RecognizeService:
             rows = soup.select(sel)
             if rows:
                 ing_rows = rows
-                logger.info("[下厨房] 步骤5/7 - 匹配选择器 '%s' → 找到 %d 行", sel, len(rows))
                 break
         if not ing_rows:
-            logger.warning("[下厨房] 步骤5/7 - 未匹配到用料行, 尝试的选择器: %s", ing_selectors)
+            logger.warning("未匹配到用料行, 尝试的选择器: %s", ing_selectors)
 
         for i, row in enumerate(ing_rows):
             name_el = row.select_one("td.name, .ingredient-name")
@@ -305,30 +323,17 @@ class RecognizeService:
             if name_el:
                 name = name_el.get_text(strip=True)
                 quantity_text = qty_el.get_text(strip=True) if qty_el else ""
-                match = re.match(
-                    r"([\d./]+)\s*(克|勺|匙|汤匙|茶匙|大匙|小匙|只|个|根|把|块|片|条|碗|杯|"
-                    r"毫升|升|斤|两|磅|g|kg|ml|l|tbsp|tsp|cup)?\s*(.*)",
-                    quantity_text, re.IGNORECASE
-                )
-                if match:
-                    quantity, unit = match.group(1), (match.group(2) or match.group(3) or "")
-                else:
-                    quantity, unit = quantity_text, ""
+                quantity, unit, parsed_name = self._parse_ingredient_text(quantity_text)
+                if parsed_name:
+                    name = parsed_name
 
-                is_seasoning = any(kw in name for kw in seasoning_keywords)
-                if is_seasoning:
+                if self._is_seasoning(name):
                     seasonings.append(SeasoningItem(name=name, quantity=quantity, unit=unit))
-                    logger.info("[下厨房] 步骤5/7 - 调料[%d]: name=%s, qty=%s, unit=%s",
-                               i, name, quantity, unit)
                 else:
                     ingredients.append(IngredientItem(name=name, quantity=quantity, unit=unit))
-                    logger.info("[下厨房] 步骤5/7 - 原料[%d]: name=%s, qty=%s, unit=%s",
-                               i, name, quantity, unit)
 
-        logger.info("[下厨房] 步骤5/7 - 共提取 %d 个原料, %d 个调料", len(ingredients), len(seasonings))
 
         # ---------- 步骤6: 提取步骤 ----------
-        logger.info("[下厨房] 步骤6/7 - 提取烹饪步骤...")
         steps: list[StepItem] = []
         step_selectors = [
             ".steps ol li", ".steps li", ".step-list li", ".cookstep li",
@@ -340,7 +345,6 @@ class RecognizeService:
             els = [e for e in els if e.get_text(strip=True)]
             if els:
                 step_els = els
-                logger.info("[下厨房] 步骤6/7 - 匹配选择器 '%s' → 找到 %d 个步骤", sel, len(els))
                 break
 
         if not step_els:
@@ -359,11 +363,7 @@ class RecognizeService:
 
                 if content:
                     step_img = step_el.select_one("img")
-                    step_image = ""
-                    if step_img:
-                        step_image = step_img.get("src") or step_img.get("data-src") or ""
-                        if step_image.startswith("//"):
-                            step_image = "https:" + step_image
+                    step_image = self._extract_img_url(step_img) if step_img else ""
                     steps.append(StepItem(content=content, imageUrl=step_image))
                     logger.info("[下厨房] 步骤6/7 - 步骤[%d]: %.80s%s",
                                i + 1, content, " [有配图]" if step_image else "")
@@ -395,36 +395,17 @@ class RecognizeService:
         # 解析原料
         ingredients: list[IngredientItem] = []
         seasonings: list[SeasoningItem] = []
-        seasoning_keywords = {
-            "油", "盐", "糖", "生抽", "老抽", "酱油", "醋", "料酒", "蚝油",
-            "淀粉", "生粉", "豆瓣酱", "甜面酱", "辣椒酱", "胡椒粉", "五香粉",
-            "鸡精", "味精", "香油", "芝麻油", "花椒", "八角", "桂皮",
-        }
 
         raw_ings = data.get("recipeIngredient", [])
         if isinstance(raw_ings, str):
             raw_ings = [raw_ings]
         for ing_text in raw_ings:
-            # 格式如 "250克瘦肉"、"20克豆瓣酱"、"见图片葱姜蒜末"
-            # 单位关键词：克/勺/匙/只/个/根/把/块/片/条/碗/杯/毫升/斤/两等
-            match = re.match(
-                r"([\d.]+)\s*(克|勺|大勺|小勺|匙|汤匙|茶匙|大匙|小匙|只|个|根|把|块|片|条|碗|杯|少许|少量|适量|"
-                r"毫升|升|斤|两|磅|g|kg|ml|l|tbsp|tsp|cup)?\s*(.+)",
-                ing_text, re.IGNORECASE
-            )
-            if match:
-                quantity, unit, name = match.group(1), (match.group(2) or ""), match.group(3)
-            else:
-                quantity, unit, name = "", "", ing_text
-
-            name = name.strip()
-            is_seasoning = any(kw in name for kw in seasoning_keywords)
-            if is_seasoning:
+            quantity, unit, name = self._parse_ingredient_text(ing_text)
+            if self._is_seasoning(name):
                 seasonings.append(SeasoningItem(name=name, quantity=quantity, unit=unit))
             else:
                 ingredients.append(IngredientItem(name=name, quantity=quantity, unit=unit))
 
-        logger.info("[JSON-LD] 提取原料: %d 个原料, %d 个调料", len(ingredients), len(seasonings))
 
         # 解析步骤（文字从 JSON-LD，图片从 HTML 的 .step-cover img）
         steps: list[StepItem] = []
@@ -459,11 +440,6 @@ class RecognizeService:
         for i, img_url in enumerate(step_images):
             if i < len(steps):
                 steps[i].imageUrl = img_url
-
-        logger.info("[JSON-LD] 提取步骤: %d 个 (文字), %d 个 (图片)", len(steps), len(step_images))
-        logger.info("[JSON-LD] 汇总: title='%s' | 封面图=%s | 原料=%d | 调料=%d | 步骤=%d",
-                    title, "有" if image_url else "无", len(ingredients), len(seasonings), len(steps))
-        logger.info("=" * 60)
 
         return RecipeDraft(
             title=title,
@@ -565,11 +541,11 @@ class RecognizeService:
             response = client.chat.completions.create(
                 model=settings.OPENAI_VISION_MODEL,
                 messages=[
-                    {"role": "system", "content": "你是一个精准的菜谱提取助手，只返回 JSON，不返回其他内容。"},
+                    {"role": "system", "content": VISION_PROMPT},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": VISION_PROMPT},
+                            {"type": "text", "text": "识别菜谱内容输出"},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -583,7 +559,6 @@ class RecognizeService:
                 max_tokens=4096,
             )
             raw = response.choices[0].message.content.strip()
-            logger.info("[图片识别] LLM 返回 %d 字符", len(raw))
         except Exception as e:
             logger.error("[图片识别] LLM 调用失败: %s", e)
             return RecipeDraft()
