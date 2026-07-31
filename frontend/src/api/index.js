@@ -109,6 +109,27 @@ export function deleteCookingLog(id) {
   return api.delete(`/cooking-logs/${id}`)
 }
 
+// --- ShoppingList ---
+export function generateShoppingList(startDate, endDate) {
+  return api.post('/shopping-lists', { startDate, endDate }, { params: { userId: 0 } }).then(r => r.data)
+}
+
+export function getShoppingLists() {
+  return api.get('/shopping-lists', { params: { userId: 0 } }).then(r => r.data)
+}
+
+export function getShoppingListDetail(id) {
+  return api.get(`/shopping-lists/${id}`).then(r => r.data)
+}
+
+export function toggleShoppingListItem(listId, itemId, purchased) {
+  return api.put(`/shopping-lists/${listId}/items/${itemId}`, { purchased }).then(r => r.data)
+}
+
+export function deleteShoppingList(id) {
+  return api.delete(`/shopping-lists/${id}`)
+}
+
 // --- File Upload ---
 export function uploadFile(file) {
   const formData = new FormData()

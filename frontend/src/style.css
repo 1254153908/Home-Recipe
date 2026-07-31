@@ -31,6 +31,13 @@
 
   --font: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
   --nav-height: 56px;
+  --container-width: 480px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --container-width: 768px;
+  }
 }
 
 body {
@@ -67,7 +74,7 @@ img {
 }
 
 #app {
-  max-width: 480px;
+  max-width: var(--container-width);
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
@@ -231,8 +238,7 @@ select.form-input {
 .fab {
   position: fixed;
   bottom: calc(var(--nav-height) + 16px);
-  right: 50%;
-  transform: translateX(224px);
+  right: calc(50% - (var(--container-width) / 2) + 16px);
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -248,7 +254,7 @@ select.form-input {
 }
 
 .fab:active {
-  transform: translateX(224px) scale(0.95);
+  transform: scale(0.95);
 }
 
 /* Empty state */

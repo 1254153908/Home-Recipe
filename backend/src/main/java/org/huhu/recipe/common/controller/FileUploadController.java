@@ -31,7 +31,7 @@ public class FileUploadController {
     @PostMapping("/upload/url")
     public ResponseEntity<Map<String, String>> uploadFromUrl(@RequestBody Map<String, String> body) {
         String imageUrl = body.get("url");
-        if (imageUrl == null || imageUrl.isBlank()) {
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
             throw new IllegalArgumentException("url参数不能为空");
         }
         String resultUrl = fileUploadService.uploadFromUrl(imageUrl);

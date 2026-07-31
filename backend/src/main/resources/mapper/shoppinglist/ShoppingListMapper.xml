@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.huhu.recipe.shoppinglist.mapper.ShoppingListMapper">
+
+    <select id="aggregateIngredients" resultType="java.util.Map">
+        SELECT
+            ri.ingredient_id,
+            i.name AS ingredient_name,
+            ri.unit,
+            SUM(CAST(ri.quantity AS DECIMAL(10,2))) AS total_quantity
+        FROM meal_plan mp
+        JOIN recipe_ingredient ri ON ri.recipe_id = mp.recipe_id
+        JOIN ingredient i ON i.id = ri.ingredient_id
+        WHERE mp.plan_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY ri.ingredient_id, ri.unit, i.name
+        ORDER BY i.name
+    </select>
+
+</mapper>

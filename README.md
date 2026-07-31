@@ -45,6 +45,9 @@ src/main/java/org/huhu/recipe/
 ├── seasoning/                          ← 调料字典
 │   ├── controller/ + service/ + entity/ + mapper/
 │
+├── shoppinglist/                       ← 采购清单（聚合食材、购买勾选）
+│   ├── controller/ + service/ + entity/ + mapper/ + dto/
+│
 ├── social/                             ← ⏳ 待实现（点赞、评论、社交互动）
 │
 └── user/                               ← ⏳ 待实现（注册、登录、JWT 认证）
@@ -387,9 +390,46 @@ minio:
 
 ## 数据库表一览
 
-`recipe`、`recipe_step`、`recipe_ingredient`、`recipe_seasoning`、`recipe_favorite`、`ingredient`、`seasoning`、`meal_plan`、`cooking_log`
+`recipe`、`recipe_step`、`recipe_ingredient`、`recipe_seasoning`、`recipe_favorite`、`ingredient`、`seasoning`、`meal_plan`、`cooking_log`、`shopping_list`、`shopping_list_item`
 
 字段详情见上方「数据模型」。Java 字段为驼峰，数据库列为下划线（MyBatis-Plus 已开启 `map-underscore-to-camel-case`）。
+
+---
+
+### ShoppingList 采购清单 `/api/shopping-lists`
+
+#### 生成/获取清单
+`POST /api/shopping-lists?userId=0`
+
+请求体：
+```json
+{ "startDate": "2026-07-27", "endDate": "2026-08-02" }
+```
+
+逻辑：查询 `meal_plan` 中指定日期范围的菜谱 → JOIN `recipe_ingredient` → 按 `ingredient_id + unit` 合并数量 → 排除调料 → 覆盖同日期旧数据 → 返回清单。内置 Redis 缓存（1h TTL），Redisson 分布式锁防击穿。
+
+响应：`ShoppingListVO`
+```json
+{
+  "id": 1, "userId": 0, "startDate": "2026-07-27", "endDate": "2026-08-02",
+  "items": [
+    { "id": 1, "ingredientId": 1, "name": "西红柿", "quantity": "4", "unit": "个", "isPurchased": false }
+  ]
+}
+```
+
+#### 更新食材购买状态
+`PUT /api/shopping-lists/{listId}/items/{itemId}`
+
+请求体：`{ "purchased": true }`
+
+#### 获取历史清单
+`GET /api/shopping-lists?userId=0`
+
+响应：`ShoppingListVO[]`（含明细）
+
+#### 获取清单详情
+`GET /api/shopping-lists/{id}`
 
 ---
 

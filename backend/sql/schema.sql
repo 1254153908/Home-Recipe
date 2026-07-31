@@ -153,3 +153,31 @@ CREATE TABLE cooking_log (
   PRIMARY KEY (id),
   KEY idx_plan (plan_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============ 采购清单（shopping_list）============
+-- 一次查询生成一条主记录，记录日期范围和创建时间
+DROP TABLE IF EXISTS shopping_list;
+CREATE TABLE shopping_list (
+  id          BIGINT   NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT   DEFAULT 0 COMMENT '用户ID',
+  start_date  DATE     NOT NULL COMMENT '查询起始日期',
+  end_date    DATE     NOT NULL COMMENT '查询结束日期',
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_dates (user_id, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 采购清单明细（食材），同ingredient_id+unit合并，不包含调料
+DROP TABLE IF EXISTS shopping_list_item;
+CREATE TABLE shopping_list_item (
+  id               BIGINT       NOT NULL AUTO_INCREMENT,
+  shopping_list_id BIGINT       NOT NULL COMMENT '关联清单ID',
+  ingredient_id    BIGINT       NOT NULL COMMENT '食材ID',
+  ingredient_name  VARCHAR(64)  NOT NULL COMMENT '食材名称（冗余）',
+  total_quantity   VARCHAR(64)  DEFAULT NULL COMMENT '合并数量',
+  unit             VARCHAR(16)  DEFAULT NULL COMMENT '单位',
+  is_purchased     TINYINT(1)   DEFAULT 0 COMMENT '是否已购买 0-未购 1-已购',
+  purchased_at     DATETIME     DEFAULT NULL COMMENT '购买时间',
+  PRIMARY KEY (id),
+  KEY idx_list (shopping_list_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

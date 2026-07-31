@@ -243,7 +243,6 @@ class RecognizeService:
                 })
                 resp.raise_for_status()
                 html = resp.text
-
             except Exception as e:
                 return RecipeDraft()
 
@@ -399,6 +398,7 @@ class RecognizeService:
         raw_ings = data.get("recipeIngredient", [])
         if isinstance(raw_ings, str):
             raw_ings = [raw_ings]
+
         for ing_text in raw_ings:
             quantity, unit, name = self._parse_ingredient_text(ing_text)
             if self._is_seasoning(name):

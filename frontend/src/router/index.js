@@ -32,6 +32,12 @@ const routes = [
     meta: { tab: 'plans' }
   },
   {
+    path: '/shopping-list',
+    name: 'ShoppingList',
+    component: () => import('../views/ShoppingList.vue'),
+    meta: { tab: 'list' }
+  },
+  {
     path: '/meal-plan/new',
     name: 'MealPlanCreate',
     component: () => import('../views/MealPlanForm.vue'),
@@ -42,12 +48,6 @@ const routes = [
     name: 'MealPlanEdit',
     component: () => import('../views/MealPlanForm.vue'),
     meta: { tab: 'plans' }
-  },
-  {
-    path: '/user',
-    name: 'User',
-    component: () => import('../views/User.vue'),
-    meta: { tab: 'user' }
   }
 ]
 
