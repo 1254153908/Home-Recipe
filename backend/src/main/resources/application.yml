@@ -2,6 +2,9 @@ server:
   port: 4993
 
 spring:
+  jackson:
+    deserialization:
+      accept-single-value-as-array: true
   servlet:
     multipart:
       enabled: true

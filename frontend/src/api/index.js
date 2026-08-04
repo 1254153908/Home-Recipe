@@ -46,7 +46,7 @@ export function aiRecognize(data) {
   if (!data.urlHint && data.sourceType === 'link') {
     try { data.urlHint = new URL(data.content).hostname } catch {}
   }
-  return api.post('/recipes/ai-recognize', data, { timeout: 60000 }).then(r => r.data)
+  return api.post('/recipes/ai-recognize', data, { timeout: 180000 }).then(r => r.data)
 }
 
 // --- Ingredient ---

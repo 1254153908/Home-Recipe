@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # 页面抓取超时（秒）
     FETCH_TIMEOUT: int = 15
 
+    # AI 图片识别总超时（秒）—— 多图并行 Vision 调用的截止时间
+    RECOGNIZE_TIMEOUT: int = 30
+
 settings = Settings()
 
 
