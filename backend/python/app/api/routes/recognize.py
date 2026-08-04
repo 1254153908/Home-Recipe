@@ -10,6 +10,6 @@ router = APIRouter(prefix="/recognize", tags=["AI Recognize"])
 async def recognize(request: RecognizeRequest) -> RecipeDraft:
     return await recognize_service.recognize(
         source_type=request.source_type,
-        content=request.content,
+        content=request.content,       # list[str]
         url_hint=request.url_hint,
     )

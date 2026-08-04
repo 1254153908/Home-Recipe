@@ -8,6 +8,20 @@ CREATE DATABASE IF NOT EXISTS home_recipe
 
 USE home_recipe;
 
+-- ============ 用户表 ============
+DROP TABLE IF EXISTS user;
+CREATE TABLE user (
+  id            BIGINT       NOT NULL AUTO_INCREMENT,
+  username      VARCHAR(64)  NOT NULL COMMENT '用户名（登录账号）',
+  email         VARCHAR(128) DEFAULT NULL COMMENT '邮箱（选填）',
+  password_hash VARCHAR(256) NOT NULL COMMENT 'BCrypt 加密密文',
+  nickname      VARCHAR(64)  DEFAULT NULL COMMENT '昵称',
+  avatar_url    VARCHAR(512) DEFAULT NULL COMMENT '头像 URL',
+  created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 食材
 DROP TABLE IF EXISTS ingredient;
 CREATE TABLE ingredient (
@@ -36,6 +50,7 @@ CREATE TABLE recipe (
   image_url   VARCHAR(1024) DEFAULT NULL,
   source_type VARCHAR(16)  DEFAULT 'manual' COMMENT 'manual / ai',
   source_url  VARCHAR(512) DEFAULT NULL,
+  user_id     BIGINT       DEFAULT 0,
   created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -97,6 +112,7 @@ CREATE TABLE meal_plan (
   review     VARCHAR(512) DEFAULT NULL,
   image_url  VARCHAR(512) DEFAULT NULL,
   plan_date  DATE         DEFAULT NULL,
+  user_id    BIGINT       DEFAULT 0,
   created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_recipe (recipe_id)
@@ -149,7 +165,49 @@ CREATE TABLE cooking_log (
   completed_at  DATETIME     DEFAULT NULL COMMENT '完成时间',
   image_url     VARCHAR(500) DEFAULT NULL COMMENT '成果图片',
   review        VARCHAR(1000) DEFAULT NULL COMMENT '评价/心得',
+  user_id       BIGINT       DEFAULT 0,
   created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_plan (plan_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============ 采购清单（shopping_list）============
+-- 一次查询生成一条主记录，记录日期范围和创建时间
+DROP TABLE IF EXISTS shopping_list;
+CREATE TABLE shopping_list (
+  id          BIGINT   NOT NULL AUTO_INCREMENT,
+  user_id     BIGINT   DEFAULT 0 COMMENT '用户ID',
+  start_date  DATE     NOT NULL COMMENT '查询起始日期',
+  end_date    DATE     NOT NULL COMMENT '查询结束日期',
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_dates (user_id, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 采购清单明细（食材），同ingredient_id+unit合并，不包含调料
+DROP TABLE IF EXISTS shopping_list_item;
+CREATE TABLE shopping_list_item (
+  id               BIGINT       NOT NULL AUTO_INCREMENT,
+  shopping_list_id BIGINT       NOT NULL COMMENT '关联清单ID',
+  ingredient_id    BIGINT       NOT NULL COMMENT '食材ID',
+  ingredient_name  VARCHAR(64)  NOT NULL COMMENT '食材名称（冗余）',
+  total_quantity   VARCHAR(64)  DEFAULT NULL COMMENT '合并数量',
+  unit             VARCHAR(16)  DEFAULT NULL COMMENT '单位',
+  is_purchased     TINYINT(1)   DEFAULT 0 COMMENT '是否已购买 0-未购 1-已购',
+  purchased_at     DATETIME     DEFAULT NULL COMMENT '购买时间',
+  PRIMARY KEY (id),
+  KEY idx_list (shopping_list_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============ 已有数据库迁移（如果表已存在，执行下面 ALTER）============
+-- MySQL 5.7 不支持 IF NOT EXISTS，逐条执行：
+-- ALTER TABLE recipe      ADD COLUMN user_id BIGINT DEFAULT 0;
+-- ALTER TABLE meal_plan   ADD COLUMN user_id BIGINT DEFAULT 0;
+-- ALTER TABLE cooking_log ADD COLUMN user_id BIGINT DEFAULT 0;
+
+-- ============ 测试种子用户 ============
+-- 密码: test123，BCrypt cost=10
+-- 注：BCrypt 每次生成的密文不同，下面这个只是示例。
+--     执行前通过 AuthServiceImpl 注册一次或在线 BCrypt 工具生成实际密文替换。
+-- INSERT INTO user (username, email, password_hash, nickname) VALUES
+-- ('test', 'test@example.com', '<替换为BCrypt密文>', '测试用户');

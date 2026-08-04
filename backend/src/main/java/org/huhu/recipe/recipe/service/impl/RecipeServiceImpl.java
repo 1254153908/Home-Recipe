@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.huhu.recipe.auth.config.UserContext;
 import org.huhu.recipe.common.dto.ItemInput;
 import org.huhu.recipe.common.dto.ItemView;
 import org.huhu.recipe.common.dto.StepInput;
@@ -51,11 +52,30 @@ public class RecipeServiceImpl implements RecipeService {
     @Autowired
     private FileUploadService fileUploadService;
 
+    private String resolveImageUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return url;
+        }
+        // 已经是内部存储的 URL，直接使用
+        if (url.startsWith("/uploads/") || url.startsWith("/images/")) {
+            return url;
+        }
+        // 外部 URL：下载后上传到自己的存储，失败时保留原始 URL 兜底
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            try {
+                return fileUploadService.uploadFromUrl(url);
+            } catch (Exception e) {
+                return url;
+            }
+        }
+        return url;
+    }
+
     @Override
     public RecipeDetail create(RecipeCreateRequest request) {
         Recipe recipe = new Recipe();
         recipe.setTitle(request.getTitle());
-        recipe.setImageUrl(request.getImageUrl());
+        recipe.setImageUrl(resolveImageUrl(request.getImageUrl()));
         recipe.setSourceType(StringUtils.hasText(request.getSourceType()) ? request.getSourceType() : "manual");
         recipe.setSourceUrl(request.getSourceUrl());
         recipeMapper.insert(recipe);
@@ -91,18 +111,19 @@ public class RecipeServiceImpl implements RecipeService {
             return null;
         }
 
-        // 封面图换了才删旧图
+        // 封面图换了才删旧图（先 resolve 再比较，因为 request 可能带外部 URL）
+        String resolvedCover = resolveImageUrl(request.getImageUrl());
         if (StringUtils.hasText(recipe.getImageUrl())
-                && !recipe.getImageUrl().equals(request.getImageUrl())) {
+                && !recipe.getImageUrl().equals(resolvedCover)) {
             fileUploadService.delete(recipe.getImageUrl());
         }
 
-        // 步骤图：收集新图的URL，删掉旧图但不在新图里的
+        // 步骤图：收集新图的URL（先 resolve 统一为内部 URL，再和旧 URL 比较）
         Set<String> newStepUrls = new HashSet<>();
         if (request.getSteps() != null) {
             for (StepInput step : request.getSteps()) {
                 if (StringUtils.hasText(step.getImageUrl())) {
-                    newStepUrls.add(step.getImageUrl());
+                    newStepUrls.add(resolveImageUrl(step.getImageUrl()));
                 }
             }
         }
@@ -115,7 +136,7 @@ public class RecipeServiceImpl implements RecipeService {
         }
 
         recipe.setTitle(request.getTitle());
-        recipe.setImageUrl(request.getImageUrl());
+        recipe.setImageUrl(resolvedCover);
         recipe.setSourceType(request.getSourceType());
         recipe.setSourceUrl(request.getSourceUrl());
         recipeMapper.updateById(recipe);
@@ -149,7 +170,8 @@ public class RecipeServiceImpl implements RecipeService {
     }
 
     @Override
-    public void favorite(Long recipeId, Long userId) {
+    public void favorite(Long recipeId) {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("recipe_id", recipeId).eq("user_id", userId);
         if (recipeFavoriteMapper.selectCount(w) > 0) {
@@ -162,14 +184,16 @@ public class RecipeServiceImpl implements RecipeService {
     }
 
     @Override
-    public void unfavorite(Long recipeId, Long userId) {
+    public void unfavorite(Long recipeId) {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("recipe_id", recipeId).eq("user_id", userId);
         recipeFavoriteMapper.delete(w);
     }
 
     @Override
-    public List<Recipe> listFavorites(Long userId) {
+    public List<Recipe> listFavorites() {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("user_id", userId);
         List<RecipeFavorite> favs = recipeFavoriteMapper.selectList(w);
@@ -226,7 +250,7 @@ public class RecipeServiceImpl implements RecipeService {
             entity.setRecipeId(recipeId);
             entity.setStepNo(no++);
             entity.setContent(step.getContent());
-            entity.setImageUrl(step.getImageUrl());
+            entity.setImageUrl(resolveImageUrl(step.getImageUrl()));
             recipeStepMapper.insert(entity);
         }
     }

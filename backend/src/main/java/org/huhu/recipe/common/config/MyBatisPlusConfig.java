@@ -13,7 +13,9 @@ import org.springframework.context.annotation.Configuration;
         "org.huhu.recipe.mealplan.mapper",
         "org.huhu.recipe.cookinglog.mapper",
         "org.huhu.recipe.ingredient.mapper",
-        "org.huhu.recipe.seasoning.mapper"
+        "org.huhu.recipe.seasoning.mapper",
+        "org.huhu.recipe.shoppinglist.mapper",
+        "org.huhu.recipe.auth.mapper"
 })
 public class MyBatisPlusConfig {
 

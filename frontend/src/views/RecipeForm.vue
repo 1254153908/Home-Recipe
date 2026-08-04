@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createRecipe, updateRecipe, getRecipeDetail, aiRecognize, uploadFile } from '../api'
+import { createRecipe, updateRecipe, getRecipeDetail, aiRecognize, uploadFile, saveAiDraft, getAiDraft, deleteAiDraft } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +29,13 @@ const aiImagePreviews = ref([])   // 预览 URL 列表
 // Image upload
 const uploading = ref({})
 
+// -------- local file tracking: preview now, upload on save --------
+const coverFile = ref(null)
+const coverPreview = ref('')
+const stepUploads = ref({})   // { [stepId]: { file: File, preview: string } }
+let _stepId = 0
+// -----------------------------------------------------------------
+
 function showToast(msg) {
   toast.value = msg
   setTimeout(() => { toast.value = '' }, 2000)
@@ -38,33 +45,37 @@ function triggerUpload(target) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*'
-  input.onchange = async (e) => {
+  input.onchange = (e) => {
     const file = e.target.files[0]
     if (!file) return
-    uploading.value[target] = true
-    try {
-      const url = await uploadFile(file)
-      if (target === 'cover') {
-        imageUrl.value = url
-      } else if (target.startsWith('step-')) {
-        const idx = parseInt(target.split('-')[1])
-        steps.value[idx].imageUrl = url
-      }
-      showToast('Image uploaded')
-    } catch {
-      showToast('Upload failed')
-    } finally {
-      uploading.value[target] = false
+    if (target === 'cover') {
+      if (coverPreview.value) URL.revokeObjectURL(coverPreview.value)
+      coverPreview.value = URL.createObjectURL(file)
+      coverFile.value = file
+    } else if (target.startsWith('step-')) {
+      const idx = parseInt(target.split('-')[1])
+      const step = steps.value[idx]
+      if (!step) return
+      const id = step._id
+      if (stepUploads.value[id]?.preview) URL.revokeObjectURL(stepUploads.value[id].preview)
+      stepUploads.value = { ...stepUploads.value, [id]: { file, preview: URL.createObjectURL(file) } }
     }
   }
   input.click()
 }
 
 function addStep() {
-  steps.value.push({ content: '', imageUrl: '' })
+  steps.value.push({ _id: ++_stepId, content: '', imageUrl: '' })
 }
 
 function removeStep(index) {
+  const step = steps.value[index]
+  if (step?._id && stepUploads.value[step._id]) {
+    if (stepUploads.value[step._id].preview) URL.revokeObjectURL(stepUploads.value[step._id].preview)
+    const copy = { ...stepUploads.value }
+    delete copy[step._id]
+    stepUploads.value = copy
+  }
   steps.value.splice(index, 1)
 }
 
@@ -89,7 +100,7 @@ function applyDraft(result, linkUrl) {
   imageUrl.value = result.imageUrl || ''
   sourceUrl.value = linkUrl || ''
   if (result.steps?.length) {
-    steps.value = result.steps.map(s => ({ content: s.content || '', imageUrl: s.imageUrl || '' }))
+    steps.value = result.steps.map(s => ({ _id: ++_stepId, content: s.content || '', imageUrl: s.imageUrl || '' }))
   }
   if (result.ingredients?.length) {
     ingredients.value = result.ingredients.map(i => ({ name: i.name || '', quantity: i.quantity || '', unit: i.unit || '' }))
@@ -111,25 +122,34 @@ async function handleAiRecognize() {
       })
       applyDraft(result, aiContent.value.trim())
     } else {
-      // 图片模式：批量选择 → base64 → Vision 识别
+      // 图片模式：批量选择 → 全部转 base64 → Vision 识别（多图合并结果）
       if (aiImagePreviews.value.length === 0) { showToast('Select at least one image'); return }
-      // 取第一张识别（可扩展为逐张合并结果）
-      const file = aiImageFiles.value[0]
-      if (!file) { showToast('No image selected'); return }
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
+      const base64List = await Promise.all(
+        aiImageFiles.value.map(file => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+        })
+      )
       const result = await aiRecognize({
         sourceType: 'image',
-        content: base64
+        content: base64List
       })
       applyDraft(result, '')
     }
     showToast('Recognition complete')
     showAiPanel.value = false
+    // 存草稿，即使用户断网或退出也能恢复
+    saveAiDraft({
+      title: title.value,
+      imageUrl: imageUrl.value,
+      steps: steps.value,
+      ingredients: ingredients.value,
+      seasonings: seasonings.value
+    }).catch(() => {})
   } catch {
     showToast('Recognition failed, check AI service')
   } finally {
@@ -158,9 +178,18 @@ onMounted(async () => {
     imageUrl.value = detail.recipe.imageUrl || ''
     sourceType.value = detail.recipe.sourceType || ''
     sourceUrl.value = detail.recipe.sourceUrl || ''
-    steps.value = detail.steps?.length ? detail.steps.map(s => ({ content: s.content, imageUrl: s.imageUrl || '' })) : []
+    steps.value = detail.steps?.length ? detail.steps.map(s => ({ _id: ++_stepId, content: s.content, imageUrl: s.imageUrl || '' })) : []
     ingredients.value = detail.ingredients?.length ? detail.ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })) : []
     seasonings.value = detail.seasonings?.length ? detail.seasonings.map(s => ({ name: s.name, quantity: s.quantity, unit: s.unit })) : []
+  } else {
+    // 新建模式：尝试恢复 AI 识别草稿
+    try {
+      const res = await getAiDraft()
+      if (res?.data) {
+        applyDraft(res.data, '')
+        showToast('Restored AI recognition result')
+      }
+    } catch {}
   }
 })
 
@@ -171,6 +200,31 @@ async function handleSubmit() {
   }
   saving.value = true
   try {
+    // -------- 1. 上传所有待上传的本地文件 --------
+    if (coverFile.value) {
+      try {
+        imageUrl.value = await uploadFile(coverFile.value)
+        if (coverPreview.value) URL.revokeObjectURL(coverPreview.value)
+        coverPreview.value = ''
+        coverFile.value = null
+      } catch {
+        showToast('Cover upload failed'); saving.value = false; return
+      }
+    }
+    for (let i = 0; i < steps.value.length; i++) {
+      const step = steps.value[i]
+      if (step._id && stepUploads.value[step._id]) {
+        try {
+          step.imageUrl = await uploadFile(stepUploads.value[step._id].file)
+          if (stepUploads.value[step._id].preview) URL.revokeObjectURL(stepUploads.value[step._id].preview)
+          const copy = { ...stepUploads.value }; delete copy[step._id]; stepUploads.value = copy
+        } catch {
+          showToast(`Step ${i + 1} upload failed`); saving.value = false; return
+        }
+      }
+    }
+
+    // -------- 2. 提交菜谱数据 --------
     const data = {
       title: title.value.trim(),
       imageUrl: imageUrl.value.trim(),
@@ -187,6 +241,7 @@ async function handleSubmit() {
     } else {
       const result = await createRecipe(data)
       showToast('Created')
+      deleteAiDraft().catch(() => {})
       router.replace(`/recipe/${result.recipe.id}`)
     }
   } catch {
@@ -277,7 +332,7 @@ async function handleSubmit() {
           {{ uploading['cover'] ? '...' : 'Upload' }}
         </button>
       </div>
-      <img v-if="imageUrl" :src="imageUrl" class="preview-img" />
+      <img v-if="coverPreview || imageUrl" :src="coverPreview || imageUrl" class="preview-img" />
     </div>
 
     <div class="form-row">
@@ -313,6 +368,7 @@ async function handleSubmit() {
               {{ uploading[`step-${i}`] ? '...' : 'Up' }}
             </button>
           </div>
+          <img v-if="stepUploads[step._id]?.preview || step.imageUrl" :src="stepUploads[step._id]?.preview || step.imageUrl" class="preview-img" />
         </div>
         <button class="btn-remove" @click="removeStep(i)">&times;</button>
       </div>

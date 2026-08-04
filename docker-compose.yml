@@ -52,6 +52,7 @@ services:
       TZ: Asia/Shanghai
       MINIO_ROOT_USER: homecooker
       MINIO_ROOT_PASSWORD: 12345678
+      MINIO_PROMETHEUS_AUTH_TYPE: "public"
     volumes:
       - ./backend/docker/minio/data:/data
       - ./backend/docker/minio/config:/root/.minio/
@@ -134,6 +135,54 @@ services:
     networks:
       - recipe-net
 
+  # ==================== 监控 ====================
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    restart: always
+    networks:
+      - recipe-net
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: always
+    networks:
+      - recipe-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    restart: always
+    networks:
+      - recipe-net
+
   # ==================== Nginx (前端 + 反向代理) ====================
   nginx:
     image: nginx:alpine
@@ -157,6 +206,8 @@ services:
 # ==================== 数据卷 ====================
 volumes:
   uploads_data:
+  prometheus_data:
+  grafana_data:
 
 # ==================== 网络 ====================
 networks:

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -11,74 +12,6 @@ from app.core.config import settings
 from app.schemas.response import RecipeDraft, StepItem, IngredientItem, SeasoningItem
 
 logger = logging.getLogger("homerecipe.service.recognize")
-
-# ---------- Mock 菜谱库 ----------
-MOCK_RECIPES: list[RecipeDraft] = [
-    RecipeDraft(
-        title="Tomato Egg Stir-fry",
-        imageUrl="https://images.unsplash.com/photo-1582452919408-c5244e6dfe7b?w=600",
-        steps=[
-            StepItem(content="Beat 3 eggs with a pinch of salt", imageUrl=""),
-            StepItem(content="Cut 2 tomatoes into wedges", imageUrl=""),
-            StepItem(content="Heat oil in wok, scramble eggs until just set, remove", imageUrl=""),
-            StepItem(content="Stir-fry tomatoes until soft, return eggs, season and serve", imageUrl=""),
-        ],
-        ingredients=[
-            IngredientItem(name="Tomato", quantity="2", unit="pc"),
-            IngredientItem(name="Egg", quantity="3", unit="pc"),
-            IngredientItem(name="Scallion", quantity="2", unit="stalk"),
-        ],
-        seasonings=[
-            SeasoningItem(name="Salt", quantity="5", unit="g"),
-            SeasoningItem(name="Sugar", quantity="3", unit="g"),
-            SeasoningItem(name="Cooking oil", quantity="15", unit="ml"),
-        ],
-    ),
-    RecipeDraft(
-        title="Mapo Tofu",
-        imageUrl="https://images.unsplash.com/photo-1582452919408-c5244e6dfe7b?w=600",
-        steps=[
-            StepItem(content="Cut soft tofu into cubes, blanch in salted boiling water for 2 min", imageUrl=""),
-            StepItem(content="Heat oil, stir-fry minced pork until browned", imageUrl=""),
-            StepItem(content="Add doubanjiang and fermented black beans, fry until fragrant", imageUrl=""),
-            StepItem(content="Add tofu, water, simmer 5 min, thicken with cornstarch slurry", imageUrl=""),
-        ],
-        ingredients=[
-            IngredientItem(name="Soft tofu", quantity="1", unit="block"),
-            IngredientItem(name="Minced pork", quantity="100", unit="g"),
-            IngredientItem(name="Garlic", quantity="3", unit="clove"),
-            IngredientItem(name="Scallion", quantity="2", unit="stalk"),
-        ],
-        seasonings=[
-            SeasoningItem(name="Doubanjiang", quantity="2", unit="tbsp"),
-            SeasoningItem(name="Soy sauce", quantity="1", unit="tbsp"),
-            SeasoningItem(name="Sichuan peppercorn", quantity="1", unit="tsp"),
-            SeasoningItem(name="Cornstarch", quantity="1", unit="tbsp"),
-        ],
-    ),
-    RecipeDraft(
-        title="Sweet and Sour Ribs",
-        imageUrl="https://images.unsplash.com/photo-1582452919408-c5244e6dfe7b?w=600",
-        steps=[
-            StepItem(content="Blanch pork ribs in boiling water, drain and pat dry", imageUrl=""),
-            StepItem(content="Heat oil, add rock sugar, caramelize until amber", imageUrl=""),
-            StepItem(content="Add ribs, coat with caramel, add soy sauce, vinegar, water", imageUrl=""),
-            StepItem(content="Simmer 40 min, reduce sauce until thick and glossy", imageUrl=""),
-        ],
-        ingredients=[
-            IngredientItem(name="Pork ribs", quantity="500", unit="g"),
-            IngredientItem(name="Ginger", quantity="3", unit="slice"),
-        ],
-        seasonings=[
-            SeasoningItem(name="Rock sugar", quantity="30", unit="g"),
-            SeasoningItem(name="Black vinegar", quantity="3", unit="tbsp"),
-            SeasoningItem(name="Soy sauce", quantity="2", unit="tbsp"),
-            SeasoningItem(name="Cooking wine", quantity="2", unit="tbsp"),
-        ],
-    ),
-]
-
-
 # ---------- JSON 解析辅助 ----------
 def _parse_json(raw: str) -> dict:
     """解析 LLM 返回的 JSON，自动剥离 markdown 代码块"""
@@ -208,23 +141,6 @@ class RecognizeService:
             src = "https:" + src
         return src
 
-    # ---------- Mock ----------
-    def recognize_mock(self, source_type: str, content: str) -> RecipeDraft:
-        logger.info("Mock recognizing: sourceType=%s, content=%.80s", source_type, content)
-        content_lower = content.lower()
-
-        keyword_map = {
-            "tomato": 0, "egg": 0,
-            "mapo": 1, "tofu": 1,
-            "rib": 2, "sweet": 2, "sour": 2,
-        }
-        for keyword, idx in keyword_map.items():
-            if keyword in content_lower:
-                logger.info("Matched keyword '%s' → recipe #%d", keyword, idx)
-                return MOCK_RECIPES[idx]
-
-        logger.info("No keyword matched, returning default recipe")
-        return MOCK_RECIPES[0]
 
     # ================================================================
     # 策略1: 下厨房解析（优先 JSON-LD，回退 HTML 选择器）
@@ -243,7 +159,6 @@ class RecognizeService:
                 })
                 resp.raise_for_status()
                 html = resp.text
-
             except Exception as e:
                 return RecipeDraft()
 
@@ -399,6 +314,7 @@ class RecognizeService:
         raw_ings = data.get("recipeIngredient", [])
         if isinstance(raw_ings, str):
             raw_ings = [raw_ings]
+
         for ing_text in raw_ings:
             quantity, unit, name = self._parse_ingredient_text(ing_text)
             if self._is_seasoning(name):
@@ -518,8 +434,8 @@ class RecognizeService:
     # ================================================================
     # 策略3: 图片 → Vision LLM 直接识别
     # ================================================================
-    async def recognize_image(self, base64_data: str) -> RecipeDraft:
-        """图片识别：直接传图给 Vision LLM"""
+    def _recognize_image_sync(self, base64_data: str) -> RecipeDraft:
+        """图片识别核心（同步），在线程池中运行以支持并发"""
         logger.info("[图片识别] Vision LLM 解析")
 
         # 兼容 data:image/xxx;base64, 前缀
@@ -572,22 +488,135 @@ class RecognizeService:
 
         return _build_recipe(data)
 
+    async def recognize_image(self, base64_data: str) -> RecipeDraft:
+        """异步包装，在线程池中运行避免阻塞事件循环"""
+        return await asyncio.to_thread(self._recognize_image_sync, base64_data)
+
     # ================================================================
     # 统一入口：根据 source_type 和 url_hint 自动选择策略
     # ================================================================
-    async def recognize(self, source_type: str, content: str, url_hint: str | None = None) -> RecipeDraft:
-        """统一识别入口，自动选择最优策略"""
+    # ---------- 合并总结 Prompt（文本 LLM）----------
+    CONSOLIDATE_PROMPT = """你是一个专业的菜谱编辑。以下是同一道菜的多张图片被分别识别后得到的原始结果。这些图片可能展示了同一菜谱的不同部分（食材清单截图、步骤截图、成品图等）。
+
+请将这些结果整理成一份完整的菜谱 JSON，要求：
+1. title: 最准确、最完整的菜名（不同版本选最好的那一个）
+2. imageUrl: 填空字符串
+3. steps: 按烹饪逻辑重新排序，合并相同或相似的步骤，去除重复，保持流程连贯
+4. ingredients: 去重合并（同名原料只要有不同写法就统一名称），数量/单位取最合理的
+5. seasonings: 同上，去重合并
+
+只返回纯 JSON，不要 markdown 代码块。JSON 格式：
+{
+  "title": "",
+  "imageUrl": "",
+  "steps": [{"content": "", "imageUrl": ""}],
+  "ingredients": [{"name": "", "quantity": "", "unit": ""}],
+  "seasonings": [{"name": "", "quantity": "", "unit": ""}]
+}
+
+原始识别结果：
+"""
+
+    async def _consolidate_drafts(self, drafts: list[RecipeDraft]) -> RecipeDraft:
+        """用文本 LLM 合并总结多张图片的识别结果"""
+        if len(drafts) <= 1:
+            return drafts[0] if drafts else RecipeDraft()
+
+        # 序列化所有原始结果为 JSON
+        raw_json = json.dumps(
+            [d.model_dump() for d in drafts],
+            ensure_ascii=False, indent=2
+        )
+        logger.info("[合并总结] 输入 %d 个原始结果, 共 %d 字符", len(drafts), len(raw_json))
+
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_BASE_URL,
+        )
+        try:
+            response = client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是一个精准的菜谱提取助手，只返回 JSON，不返回其他内容。"},
+                    {"role": "user", "content": self.CONSOLIDATE_PROMPT + raw_json},
+                ],
+                temperature=0.1,
+                max_tokens=4096,
+            )
+            raw = response.choices[0].message.content.strip()
+            logger.info("[合并总结] LLM 返回 %d 字符", len(raw))
+        except Exception as e:
+            logger.error("[合并总结] LLM 调用失败，回退机械合并: %s", e)
+            return await self._merge_drafts(drafts)
+
+        try:
+            data = _parse_json(raw)
+        except json.JSONDecodeError as e:
+            logger.error("[合并总结] JSON 解析失败，回退机械合并: %s", e)
+            return await self._merge_drafts(drafts)
+
+        return _build_recipe(data)
+
+    async def _merge_drafts(self, drafts: list[RecipeDraft]) -> RecipeDraft:
+        """合并多张图片的识别结果 — 取第一张非空 title + 去重合并 steps/ingredients/seasonings"""
+        merged = RecipeDraft()
+        seen_ingredients = set()
+        seen_seasonings = set()
+        seen_steps = set()
+
+        for d in drafts:
+            if d.title and not merged.title:
+                merged.title = d.title
+                merged.imageUrl = d.imageUrl
+            if not merged.title and d.title:
+                merged.title = d.title
+                merged.imageUrl = merged.imageUrl or d.imageUrl
+
+            for ing in d.ingredients:
+                key = (ing.name, ing.quantity, ing.unit)
+                if key not in seen_ingredients:
+                    seen_ingredients.add(key)
+                    merged.ingredients.append(ing)
+
+            for sea in d.seasonings:
+                key = (sea.name, sea.quantity, sea.unit)
+                if key not in seen_seasonings:
+                    seen_seasonings.add(key)
+                    merged.seasonings.append(sea)
+
+            for step in d.steps:
+                if step.content and step.content not in seen_steps:
+                    seen_steps.add(step.content)
+                    merged.steps.append(step)
+
+        return merged
+
+    async def recognize(self, source_type: str, content: str | list[str], url_hint: str | None = None) -> RecipeDraft:
+        """统一识别入口，自动选择最优策略。
+        content 可以是单个字符串（链接模式或单张图片）或字符串列表（多张图片）。
+        """
         # Mock 模式
         if settings.AI_MODE != "openai" or not settings.OPENAI_API_KEY:
             return self.recognize_mock(source_type, content)
 
-        # 图片模式
+        # 图片模式 — 支持多图
         if source_type == "image":
-            return await self.recognize_image(content)
+            if isinstance(content, list):
+                try:
+                    drafts = await asyncio.wait_for(
+                        asyncio.gather(*[self.recognize_image(img) for img in content]),
+                        timeout=settings.RECOGNIZE_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("[识别超时] 多图 Vision 调用超过 %ds，丢弃未完成结果", settings.RECOGNIZE_TIMEOUT)
+                    return RecipeDraft()
+                return await self._consolidate_drafts(drafts)
+            else:
+                return await self.recognize_image(content)
 
-        # 链接模式
+        # 链接模式 — content 是单个 URL 字符串
         if source_type == "link":
-            url = content
+            url = content if isinstance(content, str) else content[0]
             # 下厨房 → 直接 HTML 解析
             if _is_xiachufang_url(url) or (url_hint and _is_xiachufang_url(url_hint)):
                 return await self.recognize_xiachufang(url)
@@ -596,7 +625,8 @@ class RecognizeService:
 
         # 兜底
         logger.warning("Unknown source_type=%s, fallback to webpage", source_type)
-        return await self.recognize_webpage(content)
+        url = content if isinstance(content, str) else content[0] if content else ""
+        return await self.recognize_webpage(url)
 
 
 recognize_service = RecognizeService()

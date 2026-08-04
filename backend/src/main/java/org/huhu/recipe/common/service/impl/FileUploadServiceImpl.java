@@ -95,7 +95,7 @@ public class FileUploadServiceImpl implements FileUploadService {
 
     @Override
     public String uploadFromUrl(String imageUrl) {
-        if (imageUrl == null || imageUrl.isBlank()) {
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
             throw new IllegalArgumentException("图片URL不能为空");
         }
 
@@ -169,7 +169,7 @@ public class FileUploadServiceImpl implements FileUploadService {
 
     @Override
     public void delete(String url) {
-        if (url == null || url.isBlank()) {
+        if (url == null || url.trim().isEmpty()) {
             return;
         }
 

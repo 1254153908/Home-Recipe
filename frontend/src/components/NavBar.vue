@@ -6,7 +6,7 @@ const route = useRoute()
 const tabs = [
   { key: 'recipes', label: 'Recipes', icon: 'recipe', to: '/' },
   { key: 'plans', label: 'Plans', icon: 'plan', to: '/plans' },
-  { key: 'user', label: 'Profile', icon: 'user', to: '/user' }
+  { key: 'list', label: 'List', icon: 'list', to: '/shopping-list' }
 ]
 </script>
 
@@ -30,9 +30,10 @@ const tabs = [
           <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <path d="M9 12h6M9 16h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </template>
-        <template v-if="tab.icon === 'user'">
-          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
-          <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <template v-if="tab.icon === 'list'">
+          <rect x="3" y="3" width="18" height="20" rx="3" stroke="currentColor" stroke-width="2"/>
+          <path d="M7 10h10M7 14h10M7 18h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M8 3V1M12 3V1M16 3V1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </template>
       </svg>
       <span class="nav-label">{{ tab.label }}</span>
@@ -47,7 +48,7 @@ const tabs = [
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 480px;
+  max-width: var(--container-width);
   height: var(--nav-height);
   background: var(--card-bg);
   border-top: 1px solid var(--border-divider);

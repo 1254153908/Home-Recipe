@@ -83,11 +83,13 @@ def recognize():
     data = request.get_json(silent=True) or {}
     source_type = data.get("sourceType", "image")
     content = data.get("content", "")
+    # 多图时取第一张的内容用于日志/匹配
+    display_content = content[0] if isinstance(content, list) and content else content
 
     draft = dict(random.choice(RECIPES))
     # 回写识别依据，方便前端展示“识别自哪类来源”
     draft["sourceType"] = "ai"
-    draft["sourceUrl"] = content
+    draft["sourceUrl"] = display_content
     draft["recognizedFrom"] = source_type
     return jsonify(draft)
 
