@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.huhu.recipe.auth.config.UserContext;
 import org.huhu.recipe.shoppinglist.dto.ShoppingListItemVO;
 import org.huhu.recipe.shoppinglist.dto.ShoppingListRequest;
 import org.huhu.recipe.shoppinglist.dto.ShoppingListVO;
@@ -45,7 +46,8 @@ public class ShoppingListServiceImpl implements ShoppingListService {
 
     @Override
     @Transactional
-    public ShoppingListVO generate(ShoppingListRequest request, Long userId) {
+    public ShoppingListVO generate(ShoppingListRequest request) {
+        Long userId = UserContext.getUserId();
         String lockKey = LOCK_KEY_PREFIX + ":" + userId + ":" + request.getStartDate() + ":" + request.getEndDate();
         RLock lock = redissonClient.getLock(lockKey);
         try {
@@ -136,7 +138,8 @@ public class ShoppingListServiceImpl implements ShoppingListService {
     }
 
     @Override
-    public List<ShoppingListVO> getHistory(Long userId) {
+    public List<ShoppingListVO> getHistory() {
+        Long userId = UserContext.getUserId();
         String historyKey = CACHE_KEY_PREFIX + ":history:" + userId;
         @SuppressWarnings("unchecked")
         List<ShoppingListVO> cached = (List<ShoppingListVO>) redisTemplate.opsForValue().get(historyKey);

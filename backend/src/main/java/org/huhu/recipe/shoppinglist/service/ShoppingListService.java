@@ -6,11 +6,11 @@ import org.huhu.recipe.shoppinglist.dto.ShoppingListVO;
 
 public interface ShoppingListService {
 
-    ShoppingListVO generate(ShoppingListRequest request, Long userId);
+    ShoppingListVO generate(ShoppingListRequest request);
 
     void toggleItem(Long listId, Long itemId, boolean purchased);
 
-    List<ShoppingListVO> getHistory(Long userId);
+    List<ShoppingListVO> getHistory();
 
     ShoppingListVO getDetail(Long id);
 

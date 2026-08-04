@@ -1,14 +1,42 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import { computed } from 'vue'
 
 const route = useRoute()
+const router = useRouter()
 const showNav = computed(() => route.meta.tab !== undefined)
 const showPanel = ref(false)
 const panelRef = ref(null)
 const touchStartX = ref(0)
+
+function getUserInfo() {
+  try {
+    return JSON.parse(localStorage.getItem('user')) || {}
+  } catch {
+    return {}
+  }
+}
+
+function tokenExists() {
+  return !!localStorage.getItem('token')
+}
+
+function handleAvatarClick() {
+  if (tokenExists()) {
+    openPanel()
+  } else {
+    router.push('/login')
+  }
+}
+
+function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  closePanel()
+  router.push('/login')
+}
 
 function openPanel() {
   showPanel.value = true
@@ -60,8 +88,8 @@ function onKeydown(e) {
     <router-view />
 
     <!-- Top-right avatar -->
-    <button class="avatar-btn" @click="openPanel" v-show="showNav">
-      <span class="avatar-char">D</span>
+    <button class="avatar-btn" @click="handleAvatarClick" v-show="showNav">
+      <span class="avatar-char">{{ tokenExists() ? (getUserInfo().nickname || 'U')[0].toUpperCase() : '→' }}</span>
     </button>
 
     <!-- Slide-out Profile Panel -->
@@ -76,12 +104,14 @@ function onKeydown(e) {
         >
           <!-- User Card -->
           <div class="panel-user-card">
-            <div class="panel-avatar">D</div>
+            <div class="panel-avatar">{{ (getUserInfo().nickname || 'U')[0].toUpperCase() }}</div>
             <div class="panel-user-info">
-              <h2 class="panel-user-name">Default User</h2>
-              <p class="panel-user-id">User ID: 0</p>
+              <h2 class="panel-user-name">{{ getUserInfo().nickname || 'User' }}</h2>
+              <p class="panel-user-id">@{{ getUserInfo().username || '' }}</p>
             </div>
           </div>
+
+          <button class="logout-btn" @click="logout">退出登录</button>
 
           <!-- About -->
           <div class="panel-section">
@@ -293,5 +323,17 @@ function onKeydown(e) {
   height: 1px;
   background: var(--border-divider);
   margin: 0 16px;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  font-size: 15px;
+  color: var(--danger);
+  margin-top: 12px;
+  cursor: pointer;
 }
 </style>

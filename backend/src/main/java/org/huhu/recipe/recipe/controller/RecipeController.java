@@ -1,6 +1,7 @@
 package org.huhu.recipe.recipe.controller;
 
 import java.util.List;
+import org.huhu.recipe.auth.config.UserContext;
 import org.huhu.recipe.common.dto.AiRecognizeRequest;
 import org.huhu.recipe.common.dto.RecipeDraft;
 import org.huhu.recipe.recipe.dto.RecipeCreateRequest;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -54,18 +54,18 @@ public class RecipeController {
     }
 
     @PostMapping("/{id}/favorite")
-    public void favorite(@PathVariable Long id, @RequestParam(defaultValue = "0") Long userId) {
-        recipeService.favorite(id, userId);
+    public void favorite(@PathVariable Long id) {
+        recipeService.favorite(id);
     }
 
     @DeleteMapping("/{id}/favorite")
-    public void unfavorite(@PathVariable Long id, @RequestParam(defaultValue = "0") Long userId) {
-        recipeService.unfavorite(id, userId);
+    public void unfavorite(@PathVariable Long id) {
+        recipeService.unfavorite(id);
     }
 
     @GetMapping("/favorites")
-    public List<Recipe> favorites(@RequestParam(defaultValue = "0") Long userId) {
-        return recipeService.listFavorites(userId);
+    public List<Recipe> favorites() {
+        return recipeService.listFavorites();
     }
 
     /** AI 识别链接/视频/图片，返回可自动填充的菜谱草稿 */

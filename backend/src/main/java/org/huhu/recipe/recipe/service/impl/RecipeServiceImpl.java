@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.huhu.recipe.auth.config.UserContext;
 import org.huhu.recipe.common.dto.ItemInput;
 import org.huhu.recipe.common.dto.ItemView;
 import org.huhu.recipe.common.dto.StepInput;
@@ -169,7 +170,8 @@ public class RecipeServiceImpl implements RecipeService {
     }
 
     @Override
-    public void favorite(Long recipeId, Long userId) {
+    public void favorite(Long recipeId) {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("recipe_id", recipeId).eq("user_id", userId);
         if (recipeFavoriteMapper.selectCount(w) > 0) {
@@ -182,14 +184,16 @@ public class RecipeServiceImpl implements RecipeService {
     }
 
     @Override
-    public void unfavorite(Long recipeId, Long userId) {
+    public void unfavorite(Long recipeId) {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("recipe_id", recipeId).eq("user_id", userId);
         recipeFavoriteMapper.delete(w);
     }
 
     @Override
-    public List<Recipe> listFavorites(Long userId) {
+    public List<Recipe> listFavorites() {
+        Long userId = UserContext.getUserId();
         QueryWrapper<RecipeFavorite> w = new QueryWrapper<>();
         w.eq("user_id", userId);
         List<RecipeFavorite> favs = recipeFavoriteMapper.selectList(w);

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import router from '../router'
 
 const api = axios.create({
   baseURL: '/api',
@@ -6,7 +7,44 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-const USER_ID = 0
+// --- request interceptor: attach JWT token ---
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  error => Promise.reject(error)
+)
+
+// --- response interceptor: 401 → redirect to login ---
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token')
+      if (router.currentRoute.value.path !== '/login') {
+        router.push('/login')
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
+// --- Auth ---
+export function login(data) {
+  return api.post('/auth/login', data).then(r => r.data.data)
+}
+
+export function register(data) {
+  return api.post('/auth/register', data).then(r => r.data)
+}
+
+export function getMe() {
+  return api.get('/auth/me').then(r => r.data)
+}
 
 // --- Recipe ---
 export function getRecipes() {
@@ -30,19 +68,18 @@ export function deleteRecipe(id) {
 }
 
 export function favoriteRecipe(id) {
-  return api.post(`/recipes/${id}/favorite`, null, { params: { userId: USER_ID } })
+  return api.post(`/recipes/${id}/favorite`)
 }
 
 export function unfavoriteRecipe(id) {
-  return api.delete(`/recipes/${id}/favorite`, { params: { userId: USER_ID } })
+  return api.delete(`/recipes/${id}/favorite`)
 }
 
 export function getFavoriteRecipes() {
-  return api.get('/recipes/favorites', { params: { userId: USER_ID } }).then(r => r.data)
+  return api.get('/recipes/favorites').then(r => r.data)
 }
 
 export function aiRecognize(data) {
-  // urlHint: 自动从 URL 提取域名，辅助 Python 选择解析策略
   if (!data.urlHint && data.sourceType === 'link') {
     try { data.urlHint = new URL(data.content).hostname } catch {}
   }
@@ -111,11 +148,11 @@ export function deleteCookingLog(id) {
 
 // --- ShoppingList ---
 export function generateShoppingList(startDate, endDate) {
-  return api.post('/shopping-lists', { startDate, endDate }, { params: { userId: 0 } }).then(r => r.data)
+  return api.post('/shopping-lists', { startDate, endDate }).then(r => r.data)
 }
 
 export function getShoppingLists() {
-  return api.get('/shopping-lists', { params: { userId: 0 } }).then(r => r.data)
+  return api.get('/shopping-lists').then(r => r.data)
 }
 
 export function getShoppingListDetail(id) {
@@ -138,4 +175,17 @@ export function uploadFile(file) {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 30000
   }).then(r => r.data.url)
+}
+
+// --- AI Draft ---
+export function saveAiDraft(data) {
+  return api.post('/ai-draft', data)
+}
+
+export function getAiDraft() {
+  return api.get('/ai-draft').then(r => r.data)
+}
+
+export function deleteAiDraft() {
+  return api.delete('/ai-draft')
 }

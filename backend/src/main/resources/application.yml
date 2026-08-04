@@ -22,7 +22,7 @@ spring:
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
-  type-aliases-package: org.huhu.recipe.recipe.entity,org.huhu.recipe.mealplan.entity,org.huhu.recipe.cookinglog.entity,org.huhu.recipe.ingredient.entity,org.huhu.recipe.seasoning.entity,org.huhu.recipe.shoppinglist.entity
+  type-aliases-package: org.huhu.recipe.recipe.entity,org.huhu.recipe.mealplan.entity,org.huhu.recipe.cookinglog.entity,org.huhu.recipe.ingredient.entity,org.huhu.recipe.seasoning.entity,org.huhu.recipe.shoppinglist.entity,org.huhu.recipe.auth.entity
   configuration:
     map-underscore-to-camel-case: true
   global-config:
@@ -54,3 +54,7 @@ management:
   metrics:
     tags:
       application: homerecipe
+
+jwt:
+  secret: ${JWT_SECRET:home-recipe-jwt-secret-key-2026-must-be-at-least-256-bits-long}
+  expiration: 604800  # 7 天，单位秒

@@ -1,6 +1,7 @@
 package org.huhu.recipe.shoppinglist.controller;
 
 import java.util.List;
+import org.huhu.recipe.auth.config.UserContext;
 import org.huhu.recipe.shoppinglist.dto.ShoppingListRequest;
 import org.huhu.recipe.shoppinglist.dto.ShoppingListVO;
 import org.huhu.recipe.shoppinglist.dto.TogglePurchasedRequest;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -23,12 +23,9 @@ public class ShoppingListController {
     @Autowired
     private ShoppingListService shoppingListService;
 
-    private static final long DEFAULT_USER_ID = 0L;
-
     @PostMapping
-    public ShoppingListVO generate(@RequestBody ShoppingListRequest request,
-                                   @RequestParam(defaultValue = "0") Long userId) {
-        return shoppingListService.generate(request, userId);
+    public ShoppingListVO generate(@RequestBody ShoppingListRequest request) {
+        return shoppingListService.generate(request);
     }
 
     @PutMapping("/{listId}/items/{itemId}")
@@ -39,8 +36,8 @@ public class ShoppingListController {
     }
 
     @GetMapping
-    public List<ShoppingListVO> getHistory(@RequestParam(defaultValue = "0") Long userId) {
-        return shoppingListService.getHistory(userId);
+    public List<ShoppingListVO> getHistory() {
+        return shoppingListService.getHistory();
     }
 
     @GetMapping("/{id}")

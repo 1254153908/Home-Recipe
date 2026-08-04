@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createRecipe, updateRecipe, getRecipeDetail, aiRecognize, uploadFile } from '../api'
+import { createRecipe, updateRecipe, getRecipeDetail, aiRecognize, uploadFile, saveAiDraft, getAiDraft, deleteAiDraft } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -142,6 +142,14 @@ async function handleAiRecognize() {
     }
     showToast('Recognition complete')
     showAiPanel.value = false
+    // 存草稿，即使用户断网或退出也能恢复
+    saveAiDraft({
+      title: title.value,
+      imageUrl: imageUrl.value,
+      steps: steps.value,
+      ingredients: ingredients.value,
+      seasonings: seasonings.value
+    }).catch(() => {})
   } catch {
     showToast('Recognition failed, check AI service')
   } finally {
@@ -173,6 +181,15 @@ onMounted(async () => {
     steps.value = detail.steps?.length ? detail.steps.map(s => ({ _id: ++_stepId, content: s.content, imageUrl: s.imageUrl || '' })) : []
     ingredients.value = detail.ingredients?.length ? detail.ingredients.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })) : []
     seasonings.value = detail.seasonings?.length ? detail.seasonings.map(s => ({ name: s.name, quantity: s.quantity, unit: s.unit })) : []
+  } else {
+    // 新建模式：尝试恢复 AI 识别草稿
+    try {
+      const res = await getAiDraft()
+      if (res?.data) {
+        applyDraft(res.data, '')
+        showToast('Restored AI recognition result')
+      }
+    } catch {}
   }
 })
 
@@ -224,6 +241,7 @@ async function handleSubmit() {
     } else {
       const result = await createRecipe(data)
       showToast('Created')
+      deleteAiDraft().catch(() => {})
       router.replace(`/recipe/${result.recipe.id}`)
     }
   } catch {

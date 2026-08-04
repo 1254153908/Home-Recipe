@@ -17,9 +17,9 @@ public interface RecipeService {
 
     void delete(Long id);
 
-    void favorite(Long recipeId, Long userId);
+    void favorite(Long recipeId);
 
-    void unfavorite(Long recipeId, Long userId);
+    void unfavorite(Long recipeId);
 
-    List<Recipe> listFavorites(Long userId);
+    List<Recipe> listFavorites();
 }
